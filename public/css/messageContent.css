@@ -1,16 +1,45 @@
+#messages-container {
+    flex: 1;
+    overflow-y: auto;  /* Scroll automático cuando la conversación crece */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;     /* Ocupa toda la altura disponible */
+}
+
+.chat-window {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;     /* Importante para que flex respete el overflow */
+    color: #000;
+}
+
+.messages-display {
+    flex: 1;
+    overflow-y: auto;  /* Scroll dentro de los mensajes */
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 8px;
+}
+
 .send-section {
     display: flex;
     align-items: center; /* Alinea verticalmente el input y el botón */
-    border: 1px solid var(--primary-color);
+    border: 1px solid rgb(155, 154, 154);
     padding: 5px; /* Espaciado interno para que no pegue a los bordes */
     background-color: #fff; /* Opcional: fondo para resaltar el borde */
     width: 95%;
     margin: 0 auto;
+    overflow-y: auto;
+    flex-shrink: 0;    /* Evita que se encoja, siempre visible */
+    margin-bottom: 12px;
 }
 
 #send-message-input {
     flex: 1; /* Ocupa todo el espacio disponible */
-    border: none;
+    border: 1px solid rgb(155, 154, 154);
+    border-radius: 8px;
     outline: none; /* Quita el borde azul al hacer clic */
     padding: 8px;
 }
@@ -65,7 +94,7 @@
 
 /* Estilo para los párrafos de los mensajes */
 .text-msj {
-    color: #e6e6e6;
+    color: #727272;
     padding: 10px 15px;
     margin: 12px 0;
     border-radius: 12px;
@@ -86,13 +115,14 @@
     width: fit-content;
     margin: 8px 0;
     align-self: flex-start;
+    margin-left: 1rem
 }
 
 /* Los tres puntos */
 .spinner .dot {
     width: 8px;
-    height: 8px;
-    background-color: #888;
+    height: 6px;
+    background-color: #9e9d9d;
     border-radius: 50%;
     animation: typing 1.4s infinite both;
 }

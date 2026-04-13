@@ -1,4 +1,5 @@
 import { DeleteConversation } from "./components/DeleteConversation.js";
+import { Request } from "./helpers/Request.js";
 
 const loadConversations = async (array) => {
     const data = localStorage.getItem("msjData");
@@ -98,7 +99,29 @@ document.addEventListener("DOMContentLoaded", () => {
             messages.messages.forEach(msj => {
                 let p = document.createElement("p");
                 p.classList.add("text-msj");
-                p.textContent = msj.text;
+                
+                // CORRECCIÓN: Manejar ambos formatos de mensaje
+                if (msj.question) {
+                    p.textContent = msj.question;
+                    p.style.backgroundColor = "#e3f2fd";
+                    p.style.alignSelf = "flex-end";
+                    p.style.marginLeft = "auto";
+                    p.style.marginRight = "0";
+                } else if (msj.response) {
+                    p.textContent = msj.response;
+                    p.style.backgroundColor = "#f5f5f5";
+                    p.style.alignSelf = "flex-start";
+                    p.style.marginLeft = "0";
+                    p.style.marginRight = "auto";
+                } else if (msj.text) {
+                    // Compatibilidad con formato anterior si existía
+                    p.textContent = msj.text;
+                    p.style.backgroundColor = "#f5f5f5";
+                    p.style.alignSelf = "flex-start";
+                    p.style.marginLeft = "0";
+                    p.style.marginRight = "auto";
+                }
+                
                 messagesDisplay.appendChild(p);
             });
         }
@@ -122,8 +145,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const conversationToUpdate = conversations.find(c => c.id === id);
             if (conversationToUpdate) {
                 // 1. Guardar mensaje del usuario
-                conversationToUpdate.messages.push({ "text": inputValue });
+                conversationToUpdate.messages.push({ "question": inputValue });
                 localStorage.setItem("msjData", JSON.stringify(conversations));
+
+                // Limpiar input
+                inputMessage.value = "";
 
                 // 2. Renderizar (para que aparezca el globo del usuario)
                 renderChat(conversationToUpdate, id);
@@ -131,13 +157,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 // 3. BUSCAR el nuevo contenedor y ACTIVAR TYPING
                 const newDisplay = messageContainer.querySelector(".messages-display");
                 showTyping(newDisplay);
-
-                // 4. SIMULACIÓN DE RESPUESTA (Aquí llamas a tu API en el futuro)
+                
+                // 4. Scroll al final después de mostrar el mensaje del usuario
+                setTimeout(() => {
+                    newDisplay.scrollTop = newDisplay.scrollHeight;
+                }, 100);
+                
+                // 5. SIMULACIÓN DE RESPUESTA (Aquí llamas a tu API en el futuro)
                 setTimeout(() => {
                     hideTyping(newDisplay);
-                    conversationToUpdate.messages.push({ "text": "Respuesta automática de prueba" });
+                    conversationToUpdate.messages.push({ "response": "Respuesta automática de prueba" });
                     localStorage.setItem("msjData", JSON.stringify(conversations));
                     renderChat(conversationToUpdate, id);
+                    
+                    // Scroll al final después de la respuesta
+                    setTimeout(() => {
+                        const updatedDisplay = messageContainer.querySelector(".messages-display");
+                        if (updatedDisplay) {
+                            updatedDisplay.scrollTop = updatedDisplay.scrollHeight;
+                        }
+                    }, 100);
                 }, 1500);
             }
         };
@@ -161,6 +200,14 @@ document.addEventListener("DOMContentLoaded", () => {
         chat.appendChild(messagesDisplay);
         chat.appendChild(sendMessagesSection);
         messageContainer.appendChild(chat);
+        
+        // Scroll al final cuando se carga el chat
+        setTimeout(() => {
+            const messagesDisplayEl = messageContainer.querySelector(".messages-display");
+            if (messagesDisplayEl) {
+                messagesDisplayEl.scrollTop = messagesDisplayEl.scrollHeight;
+            }
+        }, 100);
     };
 
     // c. CARGA INICIAL
