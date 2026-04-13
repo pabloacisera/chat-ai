@@ -1,0 +1,6 @@
+POST http://localhost:5678/webhook-test/b16fbc61-aee9-46bf-a010-fc2a9f1c1e1c
+Content-Type: application/json
+
+{
+    "chatInput":"que es la mandragora?"
+}

@@ -1,0 +1,120 @@
+{
+  "name": "gemini_model_workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyAsKLbN5K8SaS0XV27T3-dn8hUZYHoHMUM",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents[0].parts[0].text",
+              "value": "={{ $json.loQueLlega.body.chatInput }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "be63b93d-b25d-4d64-a587-64b364f02be7",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nconst respuesta = {\n  respuesta: data.candidates[0].content.parts[0].text,\n  modelo: data.modelVersion,\n  tokens: data.usageMetadata.totalTokenCount\n};\n\nreturn respuesta;"
+      },
+      "id": "c90573c4-e0ac-444a-b01c-7dc681feecef",
+      "name": "return response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn {\n    loQueLlega: data\n};"
+      },
+      "id": "0431d51a-ad97-4243-9844-247dddd8f537",
+      "name": "get question",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "b16fbc61-aee9-46bf-a010-fc2a9f1c1e1c",
+        "responseMode": "lastNode",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "d823dce6-72f6-4ee5-aa0b-a4398050f919",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        40,
+        180
+      ],
+      "webhookId": "b16fbc61-aee9-46bf-a010-fc2a9f1c1e1c"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "return response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get question": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "get question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "812fc65d-2d51-4faa-8a7b-5d07cd74e20c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b326627650090e31581d6e10f634a1cb4493332f0dba9aed03d01466e461a43e"
+  },
+  "id": "kR8wJmjNvMwVRiyz",
+  "tags": []
+}

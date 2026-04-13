@@ -1,0 +1,23 @@
+:root {
+    --primary-color: rgba(57, 56, 99, 0.867);
+    --degree-primary-color: rgba(96, 96, 133, 0.867);
+    --secundary-color: #fff;
+    --border-rounded: 11px;
+}
+
+html,body {
+    background: linear-gradient(var(--primary-color), rgba(202, 201, 255, 0.867));
+    display: flex;
+    margin: 0;
+    padding:0;
+    width: 100vw;
+    height: 100vh;
+    color: var(--secundary-color)
+}
+
+#dashboard {
+    display: flex;  /* ← AGREGAR ESTO */
+    width: 100vw;
+    min-height: 90vh;
+    border: 1px solid rgb(197, 197, 197);
+}
