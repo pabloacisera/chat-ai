@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const app = express();
 const PORT = process.env.EXPRESS_PORT || 3000;
-const llmUrl = process.env.WEBHOOK_URL || '';
+const llmUrl = process.env.GEMINI_URL || '';
 
 app.use(cors());
 app.use(express.json());
