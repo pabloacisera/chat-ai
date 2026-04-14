@@ -89,7 +89,7 @@
     border-bottom: 1px solid #ddd;
     margin: 0;
     text-align: center;
-    background-color: #fff;
+    background-color: transparent;
 }
 
 /* Estilo para los párrafos de los mensajes */

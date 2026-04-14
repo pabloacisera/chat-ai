@@ -13,7 +13,8 @@ html,body {
     padding:0;
     width: 100vw;
     height: 100vh;
-    color: var(--primary-color)
+    color: var(--primary-color);
+    font-family: "Lora";
 }
 
 #dashboard {
