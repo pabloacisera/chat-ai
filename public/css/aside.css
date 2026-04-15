@@ -175,13 +175,13 @@
 
 .btn-delete-conversation:hover {
     opacity: 1;
-    background-color: rgba(224, 57, 42, 0.2);
+    background-color: hsla(0, 96%, 51%, 0.2);
 }
 
 .btn-delete-conversation svg {
     width: 18px;
     height: 18px;
-    fill: var(--delete-color);
+    fill: white;
     transition: fill var(--transition-fast);
 }
 

@@ -15,8 +15,8 @@
     --input-focus: #2d2d5a;
     --input-bg: #FFFFFF;
     --spinner-color: #616161;
-    --delete-color: #e0392a;
-    --delete-hover: #b71c1c;
+    --delete-color: #ff5252;
+    --delete-hover: #ff1744;
     --send-color: #EAC452;
     --send-hover: #c9a43d;
     --border-radius: 8px;
@@ -75,6 +75,8 @@ html,body {
 
 .buttons-section {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
     gap: 8px;
     padding: 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -160,11 +162,11 @@ html,body {
 }
 
 .btn-delete-conversation {
-    background: rgba(255, 255, 255, 0.1);
+    background: none;
     border: none;
     cursor: pointer;
-    padding: 4px 6px;
-    opacity: 0.5;
+    padding: 6px;
+    opacity: 0.6;
     transition: all 0.15s;
     border-radius: 4px;
     display: flex;
@@ -174,17 +176,27 @@ html,body {
 
 .list-conversations li:hover .btn-delete-conversation {
     opacity: 1;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .btn-delete-conversation:hover {
-    background-color: rgba(224, 57, 42, 0.4) !important;
+    background-color: rgba(224, 57, 42, 0.5) !important;
+}
+
+.btn-delete-conversation:focus {
+    outline: 2px solid var(--delete-hover);
+    outline-offset: 2px;
+}
+
+.btn-delete-conversation:focus-visible {
+    outline: 2px solid var(--delete-hover);
+    outline-offset: 2px;
 }
 
 .btn-delete-conversation svg {
-    width: 16px;
-    height: 16px;
-    fill: #ff8a80;
+    width: 20px;
+    height: 20px;
+    stroke: #ffffff;
 }
 
 .footer-li {
@@ -193,25 +205,6 @@ html,body {
     align-items: center;
     font-size: 0.75rem;
     color: var(--sidebar-text-muted);
-}
-
-.btn-delete-conversation {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px;
-    opacity: 0.4;
-    transition: all var(--transition-fast);
-}
-
-.btn-delete-conversation:hover {
-    opacity: 1;
-}
-
-.btn-delete-conversation svg {
-    width: 16px;
-    height: 16px;
-    fill: var(--delete-color);
 }
 
 .empty-conversations {
@@ -224,6 +217,82 @@ html,body {
     text-align: center;
     padding: 20px;
     font-size: 0.85rem;
+}
+
+/* === USER SECTION (footer aside) === */
+.user-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.btn-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all var(--transition-fast);
+    flex: 1;
+    justify-content: flex-start;
+}
+
+.btn-profile:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-profile svg {
+    width: 28px;
+    height: 28px;
+    fill: var(--sidebar-text-muted);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 4px;
+}
+
+.user-name {
+    color: var(--sidebar-text);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* === SETTINGS BUTTON === */
+.btn-settings {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.btn-settings:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-settings svg {
+    width: 20px;
+    height: 20px;
+    fill: var(--sidebar-text-muted);
+}
+
+.btn-settings:hover svg {
+    fill: var(--sidebar-text);
+}
+
+.user-section .btn-settings {
+    flex-shrink: 0;
+    margin-left: 8px;
 }
 
 /* === MAIN CHAT AREA === */
