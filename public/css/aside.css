@@ -1,135 +1,250 @@
+/* --- HEADER --- */
+.app-header {
+    width: 100%;
+    height: 60px;
+    background: linear-gradient(135deg, var(--primary-color), var(--degree-primary-color));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    position: relative;
+    z-index: 10;
+}
+
+.app-header h1 {
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin: 0;
+}
+
+.app-logo {
+    position: absolute;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.app-logo svg {
+    width: 32px;
+    height: 32px;
+    fill: var(--send-color);
+}
+
 /* --- SECCIÓN DE BOTONES --- */
 .buttons-section {
     width: 100%;
     display: flex;
     justify-content: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* --- CONTENEDOR ASIDE --- */
 .conversations {
     position: relative;
-    width: 28%;
-    min-width: 120px;
-    max-width: 80%;
+    width: 280px;
+    min-width: 200px;
+    max-width: 400px;
     display: flex;
     flex-direction: column;
-    box-shadow: 1px 0.2px 0.8px 0.5px rgb(219, 219, 219);
+    background-color: var(--sidebar-bg);
     height: 100vh;
-    overflow: hidden; /* Evita que el handle se salga */
+    overflow: hidden;
 }
 
-/* SOLUCIÓN AL CLIC/HOVER: 
-   Mantenemos el handle pero nos aseguramos de que no tape el contenido usable */
+/* Resize handle */
 .resize-handle {
     position: absolute;
     top: 0;
     right: 0;
-    width: 4px; 
+    width: 6px;
     height: 100%;
     cursor: ew-resize;
     background-color: transparent;
-    z-index: 20; /* Sigue arriba para poder redimensionar */
+    z-index: 20;
+    transition: background-color var(--transition-fast);
 }
 
-.resize-handle:hover {
-    background-color: rgba(100, 150, 200, 0.5);
-}
-
-.messages-content {
-    flex: 1;
+.resize-handle:hover,
+.resize-handle.active {
+    background-color: var(--sidebar-active-border);
 }
 
 /* --- LISTA DE CONVERSACIONES --- */
 .list-conversations {
-    width: 100%;
-    height: 90%;
-    background-color: var(--degree-primary-color);
+    flex: 1;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    /* AJUSTE CLAVE: Padding derecho para que el contenido no toque el resize-handle */
-    padding: 0 12px 0 12px; 
-    margin: 6px 0 0 0;
+    padding: 8px 12px;
+    margin: 0;
     list-style: none;
-    box-sizing: border-box;
     overflow-y: auto;
+    gap: 4px;
 }
 
-/* Los items (li) */
+/* Scrollbar stylizado */
+.list-conversations::-webkit-scrollbar {
+    width: 6px;
+}
+
+.list-conversations::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.list-conversations::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.list-conversations::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Items de conversación */
 .list-conversations li {
     width: 100%;
-    max-width: 450px;
-    background-color: var(--degree-primary-color);
-    margin-top: 12px;
-    padding: 8px 12px;
+    background-color: transparent;
+    padding: 12px 14px;
     box-sizing: border-box;
-    transition: background-color 0.2s ease;
+    transition: all var(--transition-fast);
     cursor: pointer;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
     position: relative;
-    z-index: 1; /* Por debajo del handle, pero ahora hay espacio gracias al padding */
 }
 
-/* HOVER SOBRE EL LI: 
-   Ahora que el mouse llega al elemento, aplicamos un color visible */
 .list-conversations li:hover {
-    background-color: #d1d1d6 !important;
+    background-color: var(--sidebar-hover);
+}
+
+.list-conversations li.active {
+    background-color: var(--sidebar-active);
+    border-left-color: var(--sidebar-active-border);
+}
+
+/* Estado active con transición suave */
+.list-conversations li.active .item-title {
+    color: #ffffff;
 }
 
 /* Título de la conversación */
-.list-conversations li .item-title {
-    font-weight: bold;
-    color: rgb(241, 239, 239);
-    margin: 0 0 5px 0;
-    /* Bloqueamos eventos en el texto para que el mouse 'atraviese' hacia el LI */
-    pointer-events: none; 
+.item-title {
+    font-weight: 600;
+    color: var(--sidebar-text);
+    margin: 0 0 6px 0;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
-/* Hover específico sobre el título (opcional, si quieres que cambie de color) */
+/* Hover específico sobre el título */
 .list-conversations li:hover .item-title {
-    color: #000; /* Puedes cambiarlo a un azul o dorado si prefieres */
+    color: #ffffff;
 }
 
 /* Footer del li (fecha + botón) */
-.list-conversations li .footer-li {
+.footer-li {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13px;
-    color: #999999;
+    font-size: 0.75rem;
+    color: var(--sidebar-text-muted);
     width: 100%;
 }
 
-/* Botón borrar: Debe ser clickable */
+/* Botón borrar - más discreto */
 .btn-delete-conversation {
     background: none;
     border: none;
     cursor: pointer;
-    padding: 0;
+    padding: 4px;
     display: flex;
     align-items: center;
-    position: relative;
-    z-index: 30; /* Por encima de todo para asegurar el click */
-    pointer-events: auto;
+    justify-content: center;
+    opacity: 0.5;
+    transition: all var(--transition-fast);
+    border-radius: 4px;
+}
+
+.btn-delete-conversation:hover {
+    opacity: 1;
+    background-color: rgba(224, 57, 42, 0.2);
 }
 
 .btn-delete-conversation svg {
-    width: 30px;
-    height: 30px;
+    width: 18px;
+    height: 18px;
+    fill: var(--delete-color);
+    transition: fill var(--transition-fast);
 }
 
-/* --- OTROS BOTONES --- */
+.btn-delete-conversation:hover svg {
+    fill: var(--delete-hover);
+}
+
+/* --- BOTONES DE ACCIÓN --- */
 .new-conversation,
 .configuration {
     border: none;
-    padding: 10px 16px;
+    padding: 10px 14px;
     border-radius: 8px;
-    background-color: var(--primary-color);
-    margin: 1.5rem 0 0 8px;
-    width: 5rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--sidebar-text);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 500;
 }
 
-.new-conversation:hover, 
+.new-conversation:hover,
 .configuration:hover {
-    cursor: pointer;
-    background-color: var(--degree-primary-color);
+    background-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.new-conversation:active,
+.configuration:active {
+    transform: translateY(0);
+}
+
+.new-conversation svg,
+.configuration svg {
+    fill: var(--sidebar-text);
+    width: 20px;
+    height: 20px;
+}
+
+/* --- ESTADO VACÍO --- */
+.empty-conversations {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--sidebar-text-muted);
+    text-align: center;
+    padding: 20px;
+}
+
+.empty-conversations svg {
+    width: 48px;
+    height: 48px;
+    fill: var(--sidebar-text-muted);
+    opacity: 0.5;
+    margin-bottom: 12px;
+}
+
+.empty-conversations p {
+    margin: 0;
+    font-size: 0.9rem;
 }

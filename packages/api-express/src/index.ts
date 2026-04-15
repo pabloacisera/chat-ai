@@ -1,3 +1,4 @@
+// @ts-nocheck
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -7,7 +8,8 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const app = express();
 const PORT = process.env.EXPRESS_PORT || 3000;
-const llmUrl = process.env.GEMINI_URL || '';
+const geminiUrl = process.env.GEMINI_URL || '';
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
 
 app.use(cors());
 app.use(express.json());
@@ -94,42 +96,62 @@ app.post("/llm/q", async (req, res) => {
         return res.status(400).json({ error: 'El campo "input" es requerido' });
     }
     
-    if (!llmUrl) {
-        return res.status(500).json({ error: 'WEBHOOK_URL no configurada' });
+    if (!geminiUrl || !geminiApiKey) {
+        return res.status(500).json({ error: 'GEMINI_URL o GEMINI_API_KEY no configuradas' });
     }
     
     try {
-        console.log(`Enviando a n8n: ${llmUrl}`);
+        console.log(`Enviando a Gemini: ${geminiUrl}`);
         console.log(`Pregunta: ${q}`);
         
-        const response = await fetch(llmUrl, {
+        const fullUrl = `${geminiUrl}?key=${geminiApiKey}`;
+        
+        const response = await fetch(fullUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ 
-                question: q,
-                timestamp: new Date().toISOString()
+                contents: [
+                    {
+                        parts: [
+                            { text: q }
+                        ]
+                    }
+                ]
             })
         });
         
         if (!response.ok) {
-            throw new Error(`n8n responded with status: ${response.status}`);
+            const errorText = await response.text();
+            throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
         }
         
         const data = await response.json();
         
+        // Extraer la respuesta del formato de Gemini
+        let answer = '';
+        if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
+            answer = data.candidates[0].content.parts[0].text;
+        } else {
+            throw new Error('Formato de respuesta inesperado de Gemini');
+        }
+        
         // Aplicar la conversión de Markdown a HTML
-        const processedData = processResponseRecursively(data);
+        const processedAnswer = simpleMarkdownToHTML(answer);
         
         res.json({ 
-            response: processedData,
+            response: [{
+                respuesta: processedAnswer,
+                modelo: data.modelVersion || 'gemini-2.5-flash',
+                tokens: data.usageMetadata?.totalTokenCount || 0
+            }],
             originalQuestion: q,
             formatted: true
         });
         
     } catch (error) {
-        console.error('Error llamando a n8n:', error);
+        console.error('Error llamando a Gemini:', error);
         res.status(500).json({ 
             error: 'Error procesando la consulta',
             details: error instanceof Error ? error.message : 'Unknown error'
@@ -139,5 +161,5 @@ app.post("/llm/q", async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`WEBHOOK_URL configurada: ${llmUrl}`);
+    console.log(`GEMINI_URL configurada: ${geminiUrl}`);
 });

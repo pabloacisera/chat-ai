@@ -22,6 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let conversations = [];
     let currentConversationId = null;
     let currentStream = null;
+    let currentRequest = null;          // Para cancelar la petición HTTP
+    let isWaitingForResponse = false;  // Estado de espera
     const asideElements = document.querySelector(".list-conversations");
     const messageContainer = document.getElementById("messages-container");
 
@@ -64,15 +66,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const asidePopulate = () => {
         asideElements.innerHTML = "";
+        
+        if (conversations.length === 0) {
+            asideElements.innerHTML = `
+                <li class="empty-conversations">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
+                        <path d="M80-160v-640q0-33 23.5-56.5T160-880h480q33 0 56.5 23.5T720-800v203q-10-2-20-2.5t-20-.5q-10 0-20 .5t-20 2.5v-203H160v400h283q-2 10-2.5 20t-.5 20q0 10 .5 20t2.5 20H200l-120-160Zm160-440h320v-80H240v80Zm0 160h200v-80H240v80Zm400 280v-120H520v-80h120v-120h80v120h120v80H640v120h-80ZM160-360v-400 400Z"/>
+                    </svg>
+                    <p>No hay conversaciones aún</p>
+                </li>
+            `;
+            return;
+        }
+        
         [...conversations].reverse().forEach(item => {
             let itemElement = document.createElement("li");
-            itemElement.classList.add(`item-${item.id}`)
+            itemElement.classList.add(`item-${item.id}`);
+            if (item.id === currentConversationId) {
+                itemElement.classList.add("active");
+            }
+            // Limpiar HTML del título del sidebar
+            const cleanSidebarTitle = item.title.replace(/<[^>]+>/g, '');
             itemElement.innerHTML = `
-                <p class="item-title" data-conversation-id="${item.id}">${item.title} - ${item.id}</p>
+                <p class="item-title" data-conversation-id="${item.id}">${cleanSidebarTitle}</p>
                 <div class="footer-li">
                     <span>${item.date}</span>
-                    <button class="btn-delete-conversation" data-id="${item.id}">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="55px" viewBox="0 -960 960 960" width="55px" fill="#e0392a">
+                    <button class="btn-delete-conversation" data-id="${item.id}" aria-label="Eliminar conversación">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
                             <path d="m376-300 104-104 104 104 56-56-104-104 104-104-56-56-104 104-104-104-56 56 104 104-104 104 56 56Zm-96 180q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520Zm-400 0v520-520Z"/>
                         </svg>
                     </button>
@@ -97,36 +117,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let titleChat = document.createElement("p");
         titleChat.classList.add("chat-title");
-        titleChat.textContent = messages.title;
+        // Limpiar HTML del título antes de mostrarlo
+        const cleanTitle = messages.title.replace(/<[^>]+>/g, '');
+        titleChat.textContent = cleanTitle;
 
         let messagesDisplay = document.createElement("div");
         messagesDisplay.classList.add("messages-display");
 
         if (messages.messages.length < 1) {
-            messagesDisplay.innerHTML = `<p class="default-question">¿En qué puedo ayudarte el día de hoy?</p>`;
+            messagesDisplay.innerHTML = `
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
+                        <path d="M80-160v-640q0-33 23.5-56.5T160-880h480q33 0 56.5 23.5T720-800v203q-10-2-20-2.5t-20-.5q-10 0-20 .5t-20 2.5v-203H160v400h283q-2 10-2.5 20t-.5 20q0 10 .5 20t2.5 20H200l-120-160Zm160-440h320v-80H240v80Zm0 160h200v-80H240v80Zm400 280v-120H520v-80h120v-120h80v120h120v80H640v120h-80ZM160-360v-400 400Z"/>
+                    </svg>
+                    <h2>¡Hola! Soy tu asistente IA</h2>
+                    <p>¿En qué puedo ayudarte hoy?</p>
+                </div>
+            `;
         } else {
             messages.messages.forEach(msj => {
-                let p = document.createElement("div"); // Cambiado de <p> a <div>
+                let p = document.createElement("div");
                 p.classList.add("text-msj");
 
                 if (msj.question) {
                     p.textContent = msj.question;
-                    p.style.backgroundColor = "#e3f2fd";
-                    p.style.alignSelf = "flex-end";
-                    p.style.marginLeft = "auto";
-                    p.style.marginRight = "0";
+                    p.classList.add("user-message");
                 } else if (msj.response) {
                     p.innerHTML = msj.response;
-                    p.style.backgroundColor = "#f5f5f5";
-                    p.style.alignSelf = "flex-start";
-                    p.style.marginLeft = "0";
-                    p.style.marginRight = "auto";
+                    p.classList.add("ai-message");
                 } else if (msj.text) {
-                    p.innerHTML = msj.text; // Cambiado de textContent a innerHTML
-                    p.style.backgroundColor = "#f5f5f5";
-                    p.style.alignSelf = "flex-start";
-                    p.style.marginLeft = "0";
-                    p.style.marginRight = "auto";
+                    p.innerHTML = msj.text;
+                    p.classList.add("ai-message");
                 }
 
                 messagesDisplay.appendChild(p);
@@ -138,11 +159,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
         let inputMessage = document.createElement("input");
         inputMessage.id = "send-message-input";
-        inputMessage.placeholder = "introduzca duda, consulta o petición...";
+        inputMessage.placeholder = "Escribe tu mensaje...";
 
         let sendBtn = document.createElement("button");
-        sendBtn.classList.add("btn-send");
-        sendBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#EAC452"><path d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z"/></svg>`;
+        sendBtn.classList.add("btn-send", "btn-action");
+        sendBtn.id = "btn-send";
+        sendBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z"/></svg>`;
+        
+        // Agregar atributos para el botón de acción
+        sendBtn.setAttribute("data-action", "send");
+        sendBtn.title = "Enviar mensaje";
 
         sendMessagesSection.appendChild(inputMessage);
         sendMessagesSection.appendChild(sendBtn);
@@ -164,29 +190,20 @@ document.addEventListener("DOMContentLoaded", () => {
         hideTyping(currentDisplay);
 
         const botMessageElement = document.createElement("div");
-        botMessageElement.classList.add("text-msj");
-        botMessageElement.style.backgroundColor = "#f5f5f5";
-        botMessageElement.style.alignSelf = "flex-start";
-        botMessageElement.style.marginLeft = "0";
-        botMessageElement.style.marginRight = "auto";
+        botMessageElement.classList.add("text-msj", "ai-message");
 
         currentDisplay.appendChild(botMessageElement);
-
-        setTimeout(() => {
-            botMessageElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }, 50);
 
         const stream = new StreamEffect({ speed: 8 });
         currentStream = stream;
 
         try {
+            // El stream ahora maneja el HTML directamente, no necesitamos sobreescribir
             await stream.write(botResponse, botMessageElement, {
-                preserveContent: true
+                scrollContainer: currentDisplay
             });
             
-            // Después de escribir, convertir el texto plano a HTML
-            botMessageElement.innerHTML = botResponse;
-
+            // Guardar en localStorage
             const lastMessageIndex = conversation.messages.length - 1;
             if (lastMessageIndex >= 0 && conversation.messages[lastMessageIndex].response === "") {
                 conversation.messages[lastMessageIndex].response = botResponse;
@@ -229,28 +246,38 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional. E
 
             console.log("📥 Respuesta del título:", titleResult);
 
+            // Función para extraer solo texto de HTML (quitar tags)
+            const stripHTML = (html) => {
+                if (!html) return '';
+                if (typeof html !== 'string') return String(html);
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+                return tmp.textContent || tmp.innerText || '';
+            };
+            
             let generatedTitle = "";
             
             if (titleResult.response && Array.isArray(titleResult.response) && titleResult.response[0]) {
-                if (titleResult.response[0].respuesta) {
-                    generatedTitle = titleResult.response[0].respuesta;
-                } else if (titleResult.response[0].text) {
-                    generatedTitle = titleResult.response[0].text;
-                } else if (typeof titleResult.response[0] === 'string') {
-                    generatedTitle = titleResult.response[0];
+                const resp = titleResult.response[0];
+                if (resp.respuesta) {
+                    generatedTitle = stripHTML(resp.respuesta);
+                } else if (resp.text) {
+                    generatedTitle = stripHTML(resp.text);
+                } else if (typeof resp === 'string') {
+                    generatedTitle = stripHTML(resp);
                 }
             }
             else if (titleResult.response && typeof titleResult.response === 'string') {
-                generatedTitle = titleResult.response;
+                generatedTitle = stripHTML(titleResult.response);
             }
             else if (titleResult.response && titleResult.response.respuesta) {
-                generatedTitle = titleResult.response.respuesta;
+                generatedTitle = stripHTML(titleResult.response.respuesta);
             }
             else if (titleResult.respuesta) {
-                generatedTitle = titleResult.respuesta;
+                generatedTitle = stripHTML(titleResult.respuesta);
             }
             else if (titleResult.text) {
-                generatedTitle = titleResult.text;
+                generatedTitle = stripHTML(titleResult.text);
             }
             else {
                 generatedTitle = userQuestion.substring(0, 40) + (userQuestion.length > 40 ? "..." : "");
@@ -299,6 +326,68 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional. E
         }
     };
 
+    // Función para actualizar el botón de enviar a stop y viceversa
+    const updateSendButton = (isWaiting) => {
+        const sendSection = document.querySelector(".send-section");
+        if (!sendSection) return;
+        
+        const btn = sendSection.querySelector(".btn-action");
+        if (!btn) return;
+        
+        if (isWaiting) {
+            // Cambiar a botón de stop
+            btn.classList.remove("btn-send");
+            btn.classList.add("btn-stop");
+            btn.setAttribute("data-action", "stop");
+            btn.title = "Detener";
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M320-320h320v320H320Zm0-400h320v320H320ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>`;
+        } else {
+            // Cambiar a botón de enviar
+            btn.classList.remove("btn-stop");
+            btn.classList.add("btn-send");
+            btn.setAttribute("data-action", "send");
+            btn.title = "Enviar mensaje";
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z"/></svg>`;
+        }
+    };
+
+    // Función para manejar el clic en el botón de acción
+    const handleActionClick = async () => {
+        const sendSection = document.querySelector(".send-section");
+        if (!sendSection) return;
+        
+        const btn = sendSection.querySelector(".btn-action");
+        const action = btn?.getAttribute("data-action");
+        
+        if (action === "stop") {
+            // Cancelar/Detener
+            if (isWaitingForResponse && currentRequest) {
+                // Cancelar la petición HTTP
+                currentRequest.cancel();
+                currentRequest = null;
+            }
+            
+            if (currentStream) {
+                // Detener el stream
+                currentStream.cancel();
+                currentStream = null;
+            }
+            
+            // Ocultar spinner
+            const currentDisplay = messageContainer.querySelector(".messages-display");
+            hideTyping(currentDisplay);
+            
+            // Restaurar botón
+            isWaitingForResponse = false;
+            updateSendButton(false);
+            
+            return;
+        }
+        
+        // Acción de enviar
+        await handleProcessAction();
+    };
+
     // Lógica unificada para procesar el envío
     const handleProcessAction = async () => {
         const inputMessage = document.getElementById("send-message-input");
@@ -312,8 +401,11 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional. E
 
         if (conversationToUpdate) {
             const isFirstMessage = conversationToUpdate.messages.length === 0;
-            console.log("¿Es primer mensaje?", isFirstMessage);
-
+            
+            // Mostrar botón de stop
+            isWaitingForResponse = true;
+            updateSendButton(true);
+            
             conversationToUpdate.messages.push({ "question": inputValue });
             localStorage.setItem("msjData", JSON.stringify(conversations));
             inputMessage.value = "";
@@ -328,47 +420,68 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional. E
                 }, 100);
             }
 
-            const result = await new Request("/api/llm/q", {
+            // Crear request con capacidad de cancelación
+            const request = new Request("/api/llm/q", {
                 input: inputValue
-            }).petition();
+            });
+            currentRequest = request;
 
-            console.log("Respuesta completa: ", result);
+            try {
+                const result = await request.petition();
+                
+                // Ya no esperamos respuesta
+                isWaitingForResponse = false;
+                
+                // Restaurar botón de enviar
+                updateSendButton(false);
+                
+                console.log("Respuesta completa: ", result);
 
-            let botResponse = "";
+                let botResponse = "";
 
-            if (result.response && Array.isArray(result.response) && result.response[0] && result.response[0].respuesta) {
-                botResponse = result.response[0].respuesta;
-            }
-            else if (result.response && typeof result.response === 'string') {
-                botResponse = result.response;
-            }
-            else if (result.response && result.response.respuesta) {
-                botResponse = result.response.respuesta;
-            }
-            else if (result.respuesta) {
-                botResponse = result.respuesta;
-            }
-            else if (result.candidates && result.candidates[0]) {
-                botResponse = result.candidates[0].content.parts[0].text;
-            }
-            else {
-                botResponse = "No se pudo obtener una respuesta";
-            }
+                if (result.response && Array.isArray(result.response) && result.response[0] && result.response[0].respuesta) {
+                    botResponse = result.response[0].respuesta;
+                }
+                else if (result.response && typeof result.response === 'string') {
+                    botResponse = result.response;
+                }
+                else if (result.response && result.response.respuesta) {
+                    botResponse = result.response.respuesta;
+                }
+                else if (result.respuesta) {
+                    botResponse = result.respuesta;
+                }
+                else if (result.candidates && result.candidates[0]) {
+                    botResponse = result.candidates[0].content.parts[0].text;
+                }
+                else {
+                    botResponse = "No se pudo obtener una respuesta";
+                }
 
-            console.log("Respuesta procesada: ", botResponse.substring(0, 100) + "...");
+                conversationToUpdate.messages.push({ "response": "" });
+                localStorage.setItem("msjData", JSON.stringify(conversations));
 
-            conversationToUpdate.messages.push({ "response": "" });
-            localStorage.setItem("msjData", JSON.stringify(conversations));
+                if (currentConversationId === idAtMomentOfSend) {
+                    await addBotMessageWithStream(conversationToUpdate, botResponse, idAtMomentOfSend);
+                }
 
-            if (currentConversationId === idAtMomentOfSend) {
-                await addBotMessageWithStream(conversationToUpdate, botResponse, idAtMomentOfSend);
-            }
-
-            if (isFirstMessage) {
-                console.log("🎯 Generando título para el primer mensaje...");
-                await generateConversationTitle(conversationToUpdate, inputValue, botResponse);
-            } else {
-                console.log("⏭️ No es el primer mensaje, omitiendo generación de título");
+                if (isFirstMessage) {
+                    await generateConversationTitle(conversationToUpdate, inputValue, botResponse);
+                }
+                
+                currentRequest = null;
+                
+            } catch (error) {
+                isWaitingForResponse = false;
+                updateSendButton(false);
+                
+                if (error.message.includes('cancelled') || error.message.includes('abort')) {
+                    console.log('Petición cancelada por el usuario');
+                } else {
+                    console.error('Error en la petición:', error);
+                }
+                
+                currentRequest = null;
             }
         }
     };
@@ -382,15 +495,15 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional. E
 
     // d. EVENTOS GLOBALES
     messageContainer.addEventListener("click", (e) => {
-        if (e.target.closest(".btn-send")) {
-            handleProcessAction();
+        if (e.target.closest(".btn-action")) {
+            handleActionClick();
         }
     });
 
     messageContainer.addEventListener("keydown", (e) => {
         if (e.target.id === "send-message-input" && e.key === "Enter") {
             e.preventDefault();
-            handleProcessAction();
+            handleActionClick();
         }
     });
 

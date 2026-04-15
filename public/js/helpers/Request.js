@@ -2,25 +2,33 @@ export class Request {
     constructor(url, data, options = {}) {
         this.url = url;
         this.data = data;
-        // Valores por defecto si no se pasan options
+        this.abortController = null;
+        this.isCancelled = false;
         this.options = {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify(this.data),
-            ...options  // Sobrescribe con lo que pase el usuario
+            ...options
         };
         this.credentials = true;
     }
 
     async petition() {
+        if (this.isCancelled) {
+            throw new Error('Request cancelled');
+        }
+        
+        this.abortController = new AbortController();
+        
         try {
             const config = {
                 method: this.options.method,
                 headers: this.options.headers,
                 credentials: this.credentials ? 'include' : 'omit',
-                body: this.options.method !== 'GET' ? this.options.body : undefined
+                body: this.options.method !== 'GET' ? this.options.body : undefined,
+                signal: this.abortController.signal
             };
 
             const response = await fetch(this.url, config);
@@ -31,15 +39,26 @@ export class Request {
             
             return await response.json();
         } catch (error) {
+            if (error.name === 'AbortError' || error.message.includes('cancel')) {
+                this.isCancelled = true;
+                throw new Error('Request cancelled');
+            }
             console.error("Error en la petición:", error);
             throw error;
         }
     }
 
-    // Método GET estático por si lo necesitás
+    cancel() {
+        if (this.abortController && !this.isCancelled) {
+            this.abortController.abort();
+            this.isCancelled = true;
+            console.log('Petición cancelada');
+        }
+    }
+
     static async get(url) {
         const request = new Request(url, null, { method: "GET" });
-        request.options.body = undefined;  // GET no lleva body
+        request.options.body = undefined;
         return request.petition();
     }
 }

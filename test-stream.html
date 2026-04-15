@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Test StreamEffect</title>
+</head>
+<body>
+    <div id="test-container" style="max-width: 500px; margin: 20px auto; font-family: sans-serif;">
+        <h2>Test StreamEffect - HTML Progressivo</h2>
+        <button onclick="runTest()">Ejecutar Test</button>
+        <button onclick="cancelTest()">Cancelar</button>
+        <div id="output" style="margin-top: 20px; padding: 15px; border: 1px solid #ccc; min-height: 100px; border-radius: 8px;"></div>
+        <div id="log" style="margin-top: 20px; font-size: 12px; color: #666;"></div>
+    </div>
+
+    <script type="module">
+        import { StreamEffect } from './public/js/helpers/streamData.js';
+        
+        let currentStream = null;
+        let testResults = [];
+        
+        window.runTest = async () => {
+            const output = document.getElementById('output');
+            const log = document.getElementById('log');
+            output.innerHTML = '';
+            log.innerHTML = '';
+            testResults = [];
+            
+            const tests = [
+                {
+                    name: 'Test 1: Texto plano simple',
+                    input: 'Hola mundo, esto es un mensaje de prueba sin HTML.',
+                },
+                {
+                    name: 'Test 2: Texto con negritas',
+                    input: 'Esto tiene **negritas** en el medio.',
+                },
+                {
+                    name: 'Test 3: Texto con múltiples formatos',
+                    input: 'Un texto con **negritas**, *cursiva* y más texto.',
+                },
+                {
+                    name: 'Test 4: Lista HTML completa',
+                    input: '<ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul>',
+                },
+                {
+                    name: 'Test 5: Párrafo con negritas y lista',
+                    input: '<p>Hola <strong>mundo</strong>:</p><ul><li>Uno</li><li>Dos</li></ul>',
+                },
+                {
+                    name: 'Test 6: Código HTML especial (entities)',
+                    input: '<p>Usar &lt;html&gt; en código</p>',
+                }
+            ];
+            
+            for (const test of tests) {
+                log.innerHTML += `<div><strong>${test.name}</strong></div>`;
+                output.innerHTML = '';
+                
+                try {
+                    currentStream = new StreamEffect({ speed: 15 });
+                    
+                    await new Promise((resolve) => {
+                        // Simular el scroll
+                        const mockScrollContainer = {
+                            scrollTop: 0,
+                            scrollHeight: 500,
+                            get scrollHeight() { return this.scrollTop + 300; },
+                            set scrollTop(v) { 
+                                log.innerHTML += `<div style="color: blue;">Scroll: ${v}</div>`; 
+                            }
+                        };
+                        
+                        currentStream.write(test.input, output, {
+                            scrollContainer: mockScrollContainer
+                        }).then(resolve).catch(e => {
+                            if (e.message !== 'Stream cancelled') {
+                                log.innerHTML += `<div style="color: red;">Error: ${e.message}</div>`;
+                            }
+                            resolve();
+                        });
+                    });
+                    
+                    // Verificar que no contiene tags sin cerrar
+                    const html = output.innerHTML;
+                    const openTags = (html.match(/<[a-z][^>]*>/gi) || []).length;
+                    const closeTags = (html.match(/<\/[a-z][^>]*>/gi) || []).length;
+                    
+                    // Verificar que no muestra tags literales como texto
+                    const hasLiteralTags = html.includes('&lt;') || html.includes('<p>');
+                    
+                    testResults.push({
+                        name: test.name,
+                        pass: !hasLiteralTags,
+                        details: `Tags abiertos: ${openTags}, cerrados: ${closeTags}, literals: ${hasLiteralTags}`
+                    });
+                    
+                    log.innerHTML += `<div style="color: ${hasLiteralTags ? 'red' : 'green'}">
+                        ✓ Finalizado - Tags literales: ${hasLiteralTags ? 'SÍ (FALLO)' : 'NO (OK)'}
+                    </div><hr>`;
+                    
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (e) {
+                    log.innerHTML += `<div style="color: red;">Error: ${e.message}</div>`;
+                    testResults.push({ name: test.name, pass: false, details: e.message });
+                }
+            }
+            
+            // Resumen
+            const passed = testResults.filter(r => r.pass).length;
+            log.innerHTML += `<div style="margin-top: 20px; padding: 10px; background: ${passed === tests.length ? '#d4edda' : '#f8d7da'}; border-radius: 4px;">
+                <strong>RESULTADO: ${passed}/${tests.length} tests passed</strong>
+            </div>`;
+        };
+        
+        window.cancelTest = () => {
+            if (currentStream) {
+                currentStream.cancel();
+            }
+        };
+    </script>
+</body>
+</html>

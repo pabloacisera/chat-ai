@@ -1,69 +1,39 @@
 /**
- * Función para simular efecto de máquina de escribir (streaming de datos)
- * @param {string} text - Texto completo a mostrar
- * @param {HTMLElement} container - Elemento contenedor donde se mostrará el texto
- * @param {Object} options - Opciones de configuración
- * @param {number} options.speed - Velocidad en ms entre cada carácter (default: 15ms para efecto rápido)
- * @param {boolean} options.preserveContent - Si debe preservar el contenido existente del contenedor (default: false)
- * @param {Function} options.onComplete - Callback al terminar de escribir
- * @returns {Promise} - Promise que se resuelve cuando termina de escribir
+ * Efecto typewriter que maneja HTML correctamente
+ * con detección de scroll por parte del usuario
  */
-export const typewriterEffect = async (text, container, options = {}) => {
-    const {
-        speed = 15,
-        preserveContent = false,
-        onComplete = null,
-        scrollContainer = null
-    } = options;
-
-    const scrollTarget = scrollContainer || container;
-
-    return new Promise((resolve) => {
-        if (!preserveContent) {
-            container.innerHTML = '';
-        }
-        
-        let index = 0;
-        
-        const typeNextChar = () => {
-            if (index < text.length) {
-                // Usar textContent para evitar problemas con HTML
-                container.textContent += text.charAt(index);
-                index++;
-                scrollTarget.scrollTop = scrollTarget.scrollHeight;
-                setTimeout(typeNextChar, speed);
-            } else {
-                if (onComplete && typeof onComplete === 'function') {
-                    onComplete();
-                }
-                resolve();
-            }
-        };
-        
-        typeNextChar();
-    });
-};
-
-// Versión alternativa con cancelación y control de velocidad variable
 export class StreamEffect {
     constructor(options = {}) {
-        this.defaultSpeed = options.speed || 15;
+        this.defaultSpeed = options.speed || 8;
         this.isCancelled = false;
+        this.userScrollingUp = false;
+        this.lastScrollTop = 0;
     }
     
     async write(text, container, options = {}) {
         const speed = options.speed || this.defaultSpeed;
-        const preserveContent = options.preserveContent || false;
         const scrollContainer = options.scrollContainer || null;
-        const scrollTarget = scrollContainer || container;
         
         this.isCancelled = false;
+        this.userScrollingUp = false;
+        this.lastScrollTop = 0;
         
+        // Limpiar contenedor
+        container.innerHTML = '';
+        
+        // Si es texto plano (sin HTML), agregar directamente
+        // Si tiene HTML, procesarlo para mostrar progresivamente
+        if (!text.includes('<') && !text.includes('>')) {
+            // Texto plano - escribir carácter por carácter
+            return this._writePlainText(text, container, speed, scrollContainer);
+        } else {
+            // Tiene HTML - escribir de forma progresiva
+            return this._writeHTMLProgressive(text, container, speed, scrollContainer);
+        }
+    }
+    
+    async _writePlainText(text, container, speed, scrollContainer) {
         return new Promise((resolve, reject) => {
-            if (!preserveContent) {
-                container.textContent = '';  // Cambiado de innerHTML a textContent
-            }
-            
             let index = 0;
             
             const writeNext = () => {
@@ -73,9 +43,9 @@ export class StreamEffect {
                 }
                 
                 if (index < text.length) {
-                    container.textContent += text.charAt(index);  // Cambiado de innerHTML a textContent
+                    container.textContent += text.charAt(index);
                     index++;
-                    scrollTarget.scrollTop = scrollTarget.scrollHeight;
+                    this._scroll(scrollContainer, container);
                     setTimeout(writeNext, speed);
                 } else {
                     resolve();
@@ -86,51 +56,124 @@ export class StreamEffect {
         });
     }
     
-    cancel() {
-        this.isCancelled = true;
-    }
-    
-    async writeWithVariableSpeed(text, container, options = {}) {
-        const {
-            startSpeed = 30,
-            endSpeed = 5,
-            preserveContent = false,
-            scrollContainer = null
-        } = options;
-        
-        const scrollTarget = scrollContainer || container;
-        
-        this.isCancelled = false;
-        
+    async _writeHTMLProgressive(htmlText, container, speed, scrollContainer) {
         return new Promise((resolve, reject) => {
-            if (!preserveContent) {
-                container.textContent = '';  // Cambiado de innerHTML a textContent
-            }
+            const segments = this._parseHTMLSegments(htmlText);
+            let segmentIndex = 0;
             
-            let index = 0;
-            const totalLength = text.length;
+            // Configurar detector de scroll del usuario
+            let scrollTimeout = null;
+            const setupScrollDetection = () => {
+                if (!scrollContainer) return;
+                
+                const handleScroll = () => {
+                    const currentTop = scrollContainer.scrollTop;
+                    
+                    // Si el usuario hace scroll hacia arriba
+                    if (currentTop < this.lastScrollTop - 5) {
+                        this.userScrollingUp = true;
+                    }
+                    
+                    this.lastScrollTop = currentTop;
+                    
+                    // Resetear después de que el usuario deje de hacer scroll
+                    clearTimeout(scrollTimeout);
+                    scrollTimeout = setTimeout(() => {
+                        this.userScrollingUp = false;
+                    }, 1000);
+                };
+                
+                scrollContainer.addEventListener('scroll', handleScroll);
+            };
             
-            const writeNext = () => {
+            setupScrollDetection();
+            
+            const writeNextSegment = () => {
                 if (this.isCancelled) {
                     reject(new Error('Stream cancelled'));
                     return;
                 }
                 
-                if (index < totalLength) {
-                    container.textContent += text.charAt(index);  // Cambiado de innerHTML a textContent
-                    index++;
-                    scrollTarget.scrollTop = scrollTarget.scrollHeight;
+                if (segmentIndex < segments.length) {
+                    const segment = segments[segmentIndex];
                     
-                    const progress = index / totalLength;
-                    const currentSpeed = startSpeed - ((startSpeed - endSpeed) * progress);
+                    if (segment.isTag) {
+                        container.innerHTML += segment.content;
+                    } else {
+                        this._writeTextSegment(container, segment.content, speed, scrollContainer, () => {
+                            segmentIndex++;
+                            writeNextSegment();
+                        });
+                        return;
+                    }
                     
-                    setTimeout(writeNext, currentSpeed);
+                    segmentIndex++;
+                    this._scroll(scrollContainer, container);
+                    setTimeout(writeNextSegment, speed);
                 } else {
                     resolve();
                 }
             };
             
-            writeNext();
+            writeNextSegment();
         });
     }
+    
+    _writeTextSegment(container, text, speed, scrollContainer, callback) {
+        let index = 0;
+        
+        const writeNext = () => {
+            if (this.isCancelled) {
+                callback();
+                return;
+            }
+            
+            if (index < text.length) {
+                container.appendChild(document.createTextNode(text.charAt(index)));
+                index++;
+                this._scroll(scrollContainer, container);
+                setTimeout(writeNext, speed / 2);
+            } else {
+                callback();
+            }
+        };
+        
+        writeNext();
+    }
+    
+    _parseHTMLSegments(html) {
+        const segments = [];
+        const regex = /(<[^>]+>)|([^<]+)/g;
+        let match;
+        
+        while ((match = regex.exec(html)) !== null) {
+            if (match[1]) {
+                segments.push({ isTag: true, content: match[1] });
+            } else if (match[2] && match[2].trim()) {
+                segments.push({ isTag: false, content: match[2] });
+            }
+        }
+        
+        return segments;
+    }
+    
+    _scroll(scrollContainer, container) {
+        // Solo hacer scroll si el usuario NO está haciendo scroll hacia arriba
+        if (this.userScrollingUp) return;
+        
+        if (scrollContainer) {
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        } else {
+            container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+    }
+    
+    cancel() {
+        this.isCancelled = true;
+    }
 }
+
+export const typewriterEffect = async (text, container, options = {}) => {
+    const stream = new StreamEffect({ speed: options.speed || 8 });
+    return stream.write(text, container, options);
+};
