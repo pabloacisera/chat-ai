@@ -1,10 +1,13 @@
-import { StreamEffect } from "./helpers/streamData.js";
 import { DeleteConversation } from "./components/DeleteConversation.js";
+import { UserModal } from "./components/UserModal.js";
+import { ConfigChatModal } from "./components/ConfigChatModal.js";
 import { Request } from "./helpers/Request.js";
 import { ConversationService } from "./services/ConversationService.js";
 import { SidebarRenderer } from "./services/SidebarRenderer.js";
 import { ChatRenderer } from "./services/ChatRenderer.js";
 import { formatDateFriendly, generateId } from "./utils/date.js";
+import { configService } from "./services/ConfigService.js";
+import { ToastNotification } from "./components/ToastNotification.js";
 
 class ChatApp {
     constructor() {
@@ -18,6 +21,8 @@ class ChatApp {
     }
 
     init() {
+        console.log("🚀 Inicializando App...");
+        
         const sidebarContainer = document.querySelector(".list-conversations");
         const chatContainer = document.getElementById("messages-container");
         
@@ -68,7 +73,13 @@ class ChatApp {
             chatContainer.addEventListener("keydown", (e) => {
                 if (e.target.id === "send-message-input" && e.key === "Enter") {
                     e.preventDefault();
-                    this.handleActionClick();
+                    const value = e.target.value.trim();
+                    
+                    if (value.startsWith("/")) {
+                        this.handleCommand(value);
+                    } else {
+                        this.handleActionClick();
+                    }
                 }
             });
         }
@@ -86,11 +97,67 @@ class ChatApp {
         }
     }
 
-    handleNewConversation() {
-        if (this.currentStream) {
-            this.currentStream.cancel();
-            this.currentStream = null;
+    handleCommand(value) {
+        const [command, ...args] = value.split(" ");
+        this.chatRenderer.clearInput();
+
+        switch (command) {
+            case "/models":
+                this.listModels();
+                break;
+            case "/set-model":
+                this.setModel(args[0]);
+                break;
+            default:
+                ToastNotification.error(`Comando desconocido: ${command}`);
+                break;
         }
+    }
+
+    listModels() {
+        const models = configService.getModelsWithKeys();
+        const current = configService.getCurrent();
+        
+        let message = "<strong>Modelos configurados:</strong><br><ul>";
+        if (models.length === 0) {
+            message = "No tienes modelos configurados con API Key. Ve a Configuración.";
+        } else {
+            models.forEach(m => {
+                const isActive = current && current.model === m.model ? " (Actual)" : "";
+                message += `<li>• ${m.model}${isActive}</li>`;
+            });
+            message += "</ul><br><small>Usa /set-model <nombre> para cambiar</small>";
+        }
+
+        const messageElement = this.chatRenderer.addBotMessage();
+        if (messageElement) {
+            messageElement.innerHTML = message;
+        }
+    }
+
+    setModel(modelName) {
+        if (!modelName) {
+            ToastNotification.error("Debes especificar un nombre de modelo");
+            return;
+        }
+
+        const models = configService.getModelsWithKeys();
+        const found = models.find(m => m.model === modelName);
+
+        if (found) {
+            configService.setCurrentModel(modelName);
+            const messageElement = this.chatRenderer.addBotMessage();
+            if (messageElement) {
+                messageElement.innerHTML = `✅ Modelo cambiado a: <strong>${modelName}</strong>`;
+            }
+            ToastNotification.success(`Cambiado a ${modelName}`);
+        } else {
+            ToastNotification.error(`El modelo "${modelName}" no está configurado o no existe`);
+        }
+    }
+
+    handleNewConversation() {
+        this.cancelRequest();
 
         const conversation = this.conversationService.create(
             "Nueva conversación",
@@ -127,48 +194,72 @@ class ChatApp {
         const conversation = this.conversationService.getById(currentId);
         if (!conversation) return;
 
+        const config = configService.getCurrent();
+        if (!config || !config.model || !config.apiKey) {
+            this.isWaitingForResponse = false;
+            this.chatRenderer.updateSendButton("send");
+            ToastNotification.error("Debes configurar el modelo y API key antes de enviar mensajes. Escribe /set-model <model> o /models");
+            return;
+        }
+
         const isFirstMessage = conversation.messages.length === 0;
         
         this.isWaitingForResponse = true;
         this.chatRenderer.updateSendButton("stop");
-        this.conversationService.addMessage(currentId, { question: value });
-        this.chatRenderer.clearInput();
         
+        // Agregar mensaje de usuario al estado y renderizar
+        this.conversationService.addMessage(currentId, { question: value });
         this.chatRenderer.render(conversation, true);
+        
+        // Agregar placeholder de respuesta al estado y obtener elemento del DOM para streaming
+        this.conversationService.addMessage(currentId, { response: "" });
+        const messageElement = this.chatRenderer.addBotMessage();
+        
+        this.chatRenderer.clearInput();
         this.chatRenderer.setTyping();
 
-        const request = new Request("/api/llm/q", { input: value });
+        const requestData = {
+            input: value,
+            model: config.model,
+            apiKey: config.apiKey,
+            maxTokens: config.maxTokens || 1000,
+            temperature: config.temperature !== undefined ? config.temperature : 0.7,
+            systemPrompt: config.systemPrompt || ""
+        };
+
+        const request = new Request("/api/llm/q", requestData);
         this.currentRequest = request;
 
+        console.log("📤 Enviando request:", requestData);
+
         try {
-            const result = await request.petition();
+            // Pasamos el signal para poder cancelar la petición y el elemento para el streaming directo
+            const result = await this.processStreamResponse("/api/llm/q", requestData, request.abortController.signal, messageElement);
+            
             this.isWaitingForResponse = false;
             this.chatRenderer.updateSendButton("send");
+            this.chatRenderer.hideTyping();
 
-            const botResponse = this.extractResponse(result);
-            this.conversationService.addMessage(currentId, { response: "" });
-
-            const messageElement = this.chatRenderer.addBotMessage();
+            const botResponse = result.respuesta || "No se pudo obtener respuesta";
             
-            if (messageElement && currentId === this.conversationService.getCurrentId()) {
-                const stream = new StreamEffect({ speed: 8 });
-                this.currentStream = stream;
-                
-                await stream.write(botResponse, messageElement, {
-                    scrollContainer: this.chatRenderer.getMessagesDisplay()
-                });
-
+            // Actualizar el último mensaje (que es el placeholder) con la respuesta final procesada
+            if (currentId === this.conversationService.getCurrentId()) {
                 const conv = this.conversationService.getById(currentId);
                 if (conv && conv.messages.length > 0) {
                     const lastIndex = conv.messages.length - 1;
-                    if (conv.messages[lastIndex].response === "") {
-                        conv.messages[lastIndex].response = botResponse;
-                        this.conversationService.save();
-                    }
+                    conv.messages[lastIndex].response = botResponse;
+                    this.conversationService.save();
                 }
             }
 
-            if (isFirstMessage) {
+            // Si tenemos el elemento, lo actualizamos con el HTML final (markdown procesado)
+            if (messageElement) {
+                messageElement.innerHTML = botResponse;
+            }
+
+            console.log("📝 Verificando si generar título:", { isFirstMessage, showTitle: configService.getShowTitle() });
+            if (isFirstMessage && configService.getShowTitle()) {
+                console.log("🎯 Disparando generación de título...");
                 await this.generateTitle(conversation, value, botResponse);
             }
 
@@ -177,6 +268,7 @@ class ChatApp {
         } catch (error) {
             this.isWaitingForResponse = false;
             this.chatRenderer.updateSendButton("send");
+            this.chatRenderer.hideTyping();
             
             if (!error.message.includes('cancelled')) {
                 console.error("Error:", error);
@@ -186,67 +278,179 @@ class ChatApp {
         }
     }
 
-    extractResponse(result) {
-        if (result.response && Array.isArray(result.response) && result.response[0]) {
-            const resp = result.response[0];
-            if (resp.respuesta) return this.stripHTML(resp.respuesta);
-            if (resp.text) return this.stripHTML(resp.text);
-            if (typeof resp === 'string') return this.stripHTML(resp);
-        }
-        if (result.response && typeof result.response === 'string') {
-            return this.stripHTML(result.response);
-        }
-        if (result.response?.respuesta) {
-            return this.stripHTML(result.response.respuesta);
-        }
-        if (result.respuesta) return this.stripHTML(result.respuesta);
-        if (result.text) return this.stripHTML(result.text);
-        if (result.candidates?.[0]) {
-            return result.candidates[0].content.parts[0].text;
-        }
-        return "No se pudo obtener una respuesta";
-    }
+async processStreamResponse(url, data, signal, targetElement = null) {
+        console.log("🚀 Iniciando processStreamResponse para:", url);
+        return new Promise((resolve, reject) => {
+            let fullResponse = "";
+            const streamSpeed = configService.getStreamSpeed();
+            let buffer = ""; 
+            
+            const writeNextChar = (element, text, delay) => {
+                return new Promise((res) => {
+                    let index = 0;
+                    const write = () => {
+                        if (index < text.length) {
+                            element.textContent += text.charAt(index);
+                            const container = element.parentElement;
+                            if (container && container.classList.contains("messages-display")) {
+                                container.scrollTop = container.scrollHeight;
+                            }
+                            index++;
+                            setTimeout(write, delay);
+                        } else {
+                            res();
+                        }
+                    };
+                    write();
+                });
+            };
+            
+            const handleStream = async () => {
+                try {
+                    console.log("📡 Realizando fetch...");
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(data),
+                        signal: signal
+                    });
 
-    stripHTML(html) {
-        if (!html) return '';
-        if (typeof html !== 'string') return String(html);
-        const tmp = document.createElement('div');
-        tmp.innerHTML = html;
-        return tmp.textContent || tmp.innerText || '';
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        console.error("❌ Error en respuesta HTTP:", response.status, errorData);
+                        reject(new Error(errorData.error || `HTTP ${response.status}`));
+                        return;
+                    }
+
+                    const reader = response.body?.getReader();
+                    const decoder = new TextDecoder();
+
+                    if (!reader) {
+                        throw new Error("No se pudo obtener el reader del stream");
+                    }
+
+                    console.log("📖 Lector de stream preparado");
+
+                    const processLine = async (line) => {
+                        const trimmedLine = line.trim();
+                        if (!trimmedLine || !trimmedLine.startsWith('data: ')) return;
+                        
+                        try {
+                            const jsonStr = trimmedLine.slice(6);
+                            const data = JSON.parse(jsonStr);
+                            
+                            if (data.error) {
+                                console.error("❌ Error devuelto por la API:", data.error);
+                                reject(new Error(data.error));
+                                return;
+                            }
+                            
+                            if (data.chunk) {
+                                fullResponse += data.chunk;
+                                
+                                if (targetElement !== false) {
+                                    let el = targetElement;
+                                    if (!el) {
+                                        const msgDisplay = this.chatRenderer.getMessagesDisplay();
+                                        el = msgDisplay?.querySelector('.ai-message:last-child');
+                                    }
+
+                                    if (el) {
+                                        await writeNextChar(el, data.chunk, streamSpeed);
+                                    }
+                                }
+                            }
+                            
+                            if (data.done) {
+                                console.log("✅ Stream finalizado (data.done)");
+                                resolve({
+                                    respuesta: data.respuesta || fullResponse,
+                                    modelo: data.modelo,
+                                    tokens: data.tokens
+                                });
+                            }
+                        } catch (e) {
+                            console.warn("⚠️ Error parseando línea:", trimmedLine, e);
+                        }
+                    };
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        
+                        if (done) {
+                            console.log("📥 Reader finalizado (done: true)");
+                            if (buffer) await processLine(buffer);
+                            break;
+                        }
+                        
+                        const chunk = decoder.decode(value, { stream: true });
+                        buffer += chunk;
+                        
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || "";
+
+                        for (const line of lines) {
+                            await processLine(line);
+                        }
+                    }
+
+                    resolve({ respuesta: fullResponse });
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.log("🛑 Stream abortado por el usuario");
+                    } else {
+                        console.error("💥 Error en handleStream:", error);
+                        reject(error);
+                    }
+                }
+            };
+
+            handleStream();
+        });
     }
 
     async generateTitle(conversation, userQuestion, botResponse) {
+        console.log("🎬 Iniciando generateTitle para:", conversation.id);
         try {
+            const config = configService.getCurrent();
+            if (!config || !config.model || !config.apiKey) {
+                console.warn("⚠️ No hay configuración para generar título");
+                return;
+            }
+
             const chatTitle = this.chatRenderer.container.querySelector(".chat-title");
             if (chatTitle) {
                 chatTitle.textContent = "Generando título...";
             }
 
-            const prompt = `Genera un título corto para esta conversación de máximo 8 palabras. 
-Basado en la pregunta del usuario: "${userQuestion}"
+            const prompt = `Genera un título corto para esta conversación de entre 5 y 10 palabras. 
+Basado en la pregunta del usuario: "${userQuestion}" y la respuesta del bot: "${botResponse.substring(0, 200)}..."
 Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
 
-            const result = await new Request("/api/llm/q", { input: prompt }).petition();
-            
-            let title = "";
-            
-            if (result.response?.[0]?.respuesta) {
-                title = this.stripHTML(result.response[0].respuesta);
-            } else if (result.response?.respuesta) {
-                title = this.stripHTML(result.response.respuesta);
-            } else if (result.respuesta) {
-                title = this.stripHTML(result.respuesta);
-            } else if (result.text) {
-                title = this.stripHTML(result.text);
-            } else {
-                title = userQuestion.substring(0, 40) + (userQuestion.length > 40 ? "..." : "");
-            }
+            const requestData = {
+                input: prompt,
+                model: config.model,
+                apiKey: config.apiKey,
+                maxTokens: 50,
+                temperature: 0.5,
+                systemPrompt: config.systemPrompt || ""
+            };
 
+            console.log("📡 Solicitando título a la API...");
+            // Usamos targetElement = false para desactivar el typewriter en el chat
+            const result = await this.processStreamResponse("/api/llm/q", requestData, null, false);
+            
+            let title = result.respuesta || "";
+            console.log("📥 Título recibido (bruto):", title);
+            
+            title = this.stripHTML(title);
             title = title.trim()
                 .replace(/^["']|["']$/g, '')
                 .replace(/^\d+\.\s*/, '')
                 .replace(/\n/g, ' ')
-                .substring(0, 50) || "Conversación";
+                .substring(0, 100) || "Conversación";
+
+            console.log("🏆 Título final procesado:", title);
 
             this.conversationService.updateTitle(conversation.id, title);
             this.conversationService.save();
@@ -257,7 +461,7 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
             }
 
         } catch (error) {
-            console.error("Error al generar título:", error);
+            console.error("❌ Error al generar título:", error);
         }
     }
 
@@ -265,11 +469,6 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
         if (this.currentRequest) {
             this.currentRequest.cancel();
             this.currentRequest = null;
-        }
-        
-        if (this.currentStream) {
-            this.currentStream.cancel();
-            this.currentStream = null;
         }
 
         this.isWaitingForResponse = false;
@@ -292,10 +491,7 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
     }
 
     selectConversation(li) {
-        if (this.currentStream) {
-            this.currentStream.cancel();
-            this.currentStream = null;
-        }
+        this.cancelRequest();
 
         const titleEl = li.querySelector('.item-title');
         const id = parseInt(titleEl.dataset.conversationId);
@@ -311,9 +507,8 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
     }
 
     showDeleteModal(id) {
-        if (this.conversationService.getCurrentId() === id && this.currentStream) {
-            this.currentStream.cancel();
-            this.currentStream = null;
+        if (this.conversationService.getCurrentId() === id) {
+            this.cancelRequest();
         }
 
         const modal = document.createElement("delete-modal");
@@ -331,11 +526,19 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
     }
 
     handleSettings() {
-        console.log("Abrir configuración");
+        const modalConfig = document.createElement("config-modal");
+        document.body.appendChild(modalConfig);
     }
 
     handleProfile() {
-        console.log("Abrir perfil");
+        const modalUser = document.createElement("user-modal");
+        document.body.appendChild(modalUser);
+    }
+
+    stripHTML(html) {
+        const tmp = document.createElement("DIV");
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || "";
     }
 }
 

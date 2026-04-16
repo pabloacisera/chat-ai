@@ -2,7 +2,7 @@ export class Request {
     constructor(url, data, options = {}) {
         this.url = url;
         this.data = data;
-        this.abortController = null;
+        this.abortController = new AbortController();
         this.isCancelled = false;
         this.options = {
             method: "POST",
@@ -19,8 +19,6 @@ export class Request {
         if (this.isCancelled) {
             throw new Error('Request cancelled');
         }
-        
-        this.abortController = new AbortController();
         
         try {
             const config = {

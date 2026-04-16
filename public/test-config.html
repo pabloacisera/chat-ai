@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Test ConfigChatModal</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .test-result { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test: ConfigChatModal y ConfigService</h1>
+    
+    <div>
+        <button id="btn-open-modal">Abrir Modal de Configuración</button>
+        <button id="btn-clear-storage">Limpiar localStorage</button>
+    </div>
+    
+    <h2>Resultados de Tests</h2>
+    <div id="results"></div>
+    
+    <h2>Estado actual de localStorage</h2>
+    <pre id="storage-state"></pre>
+    
+    <script type="module">
+        import { configService } from "./public/js/services/ConfigService.js";
+        
+        window.configService = configService;
+        
+        function log(message, isError = false) {
+            const div = document.createElement("div");
+            div.className = "test-result " + (isError ? "error" : "success");
+            div.textContent = message;
+            document.getElementById("results").appendChild(div);
+        }
+        
+        function updateStorageDisplay() {
+            const keys = Object.keys(localStorage);
+            const state = {};
+            keys.forEach(k => {
+                try {
+                    state[k] = JSON.parse(localStorage.getItem(k));
+                } catch {
+                    state[k] = localStorage.getItem(k);
+                }
+            });
+            document.getElementById("storage-state").textContent = JSON.stringify(state, null, 2);
+        }
+        
+        function runTests() {
+            log("=== INICIANDO TESTS ===");
+            
+            // Test 1: Verificar que getCurrent no dé error
+            try {
+                const current = configService.getCurrent();
+                log("✅ Test 1: getCurrent() ejecuta sin error. Resultado: " + (current ? JSON.stringify(current) : "null"));
+            } catch (e) {
+                log("❌ Test 1: getCurrent() error: " + e.message, true);
+            }
+            
+            // Test 2: Agregar config y verificar persistencia
+            try {
+                configService.add("gemini-2.5-flash", { apiKey: "test-key-123", maxTokens: 2000 });
+                const stored = localStorage.getItem("chat-config");
+                const parsed = stored ? JSON.parse(stored) : null;
+                
+                if (parsed && parsed["gemini-2.5-flash"] && parsed["gemini-2.5-flash"].apiKey === "test-key-123") {
+                    log("✅ Test 2: add() guarda correctamente en localStorage");
+                } else {
+                    log("❌ Test 2: add() no guardó correctamente", true);
+                }
+            } catch (e) {
+                log("❌ Test 2: add() error: " + e.message, true);
+            }
+            
+            // Test 3: Verificar getCurrent con modelo guardado
+            try {
+                configService.setCurrentModel("gemini-2.5-flash");
+                const current = configService.getCurrent();
+                if (current && current.model === "gemini-2.5-flash" && current.apiKey === "test-key-123") {
+                    log("✅ Test 3: getCurrent() devuelve datos correctos");
+                } else {
+                    log("❌ Test 3: getCurrent() no devolvió datos esperados: " + JSON.stringify(current), true);
+                }
+            } catch (e) {
+                log("❌ Test 3: getCurrent() error: " + e.message, true);
+            }
+            
+            // Test 4: Agregar segundo modelo
+            try {
+                configService.add("mistral-small", { apiKey: "mistral-key-456", maxTokens: 1500 });
+                const modelsWithKeys = configService.getModelsWithKeys();
+                if (modelsWithKeys.length === 2) {
+                    log("✅ Test 4: getModelsWithKeys() devuelve 2 modelos");
+                } else {
+                    log("❌ Test 4: getModelsWithKeys() esperaba 2, получи: " + modelsWithKeys.length, true);
+                }
+            } catch (e) {
+                log("❌ Test 4: error: " + e.message, true);
+            }
+            
+            // Test 5: hasKey funciona
+            try {
+                const hasGemini = configService.hasKey("gemini-2.5-flash");
+                const hasOtro = configService.hasKey("otro-modelo");
+                if (hasGemini && !hasOtro) {
+                    log("✅ Test 5: hasKey() funciona correctamente");
+                } else {
+                    log("❌ Test 5: hasKey() incorrecto", true);
+                }
+            } catch (e) {
+                log("❌ Test 5: error: " + e.message, true);
+            }
+            
+            // Test 6: removeKey funciona
+            try {
+                configService.removeKey("mistral-small");
+                const hasMistral = configService.hasKey("mistral-small");
+                if (!hasMistral) {
+                    log("✅ Test 6: removeKey() funciona correctamente");
+                } else {
+                    log("❌ Test 6: removeKey() no funcionó", true);
+                }
+            } catch (e) {
+                log("❌ Test 6: error: " + e.message, true);
+            }
+            
+            // Test 7: updateKey funciona
+            try {
+                configService.updateKey("gemini-2.5-flash", "new-key-789");
+                const config = configService.getByModel("gemini-2.5-flash");
+                if (config && config.apiKey === "new-key-789") {
+                    log("✅ Test 7: updateKey() funciona correctamente");
+                } else {
+                    log("❌ Test 7: updateKey() no funcionó", true);
+                }
+            } catch (e) {
+                log("❌ Test 7: error: " + e.message, true);
+            }
+            
+            updateStorageDisplay();
+            log("=== TESTS COMPLETADOS ===");
+        }
+        
+        document.getElementById("btn-clear-storage").addEventListener("click", () => {
+            localStorage.clear();
+            updateStorageDisplay();
+            log("✅ localStorage limpiado");
+        });
+        
+        document.getElementById("btn-open-modal").addEventListener("click", () => {
+            const modal = document.createElement("config-modal");
+            document.body.appendChild(modal);
+        });
+        
+        // Importar el modal dinámicamente
+        import("./public/js/components/ToastNotification.js")
+            .then(() => import("./public/js/components/ConfigChatModal.js"))
+            .then(() => {
+                runTests();
+            })
+            .catch(err => {
+                log("❌ Error cargando módulo: " + err.message, true);
+            });
+    </script>
+</body>
+</html>
