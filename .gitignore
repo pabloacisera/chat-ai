@@ -1,3 +1,6 @@
 node_modules/
 .env
-.txt
+.txtclaves.txt
+*.txt
+node_modules/
+*/node_modules/
