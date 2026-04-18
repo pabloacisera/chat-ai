@@ -8,6 +8,7 @@ import { ChatRenderer } from "./services/ChatRenderer.js";
 import { formatDateFriendly, generateId } from "./utils/date.js";
 import { configService } from "./services/ConfigService.js";
 import { ToastNotification } from "./components/ToastNotification.js";
+import { storageService } from "./services/StorageService.js";
 
 class ChatApp {
     constructor() {
@@ -18,9 +19,10 @@ class ChatApp {
         this.currentStream = null;
         this.currentRequest = null;
         this.isWaitingForResponse = false;
+        this.isAuthenticated = false;
     }
 
-    init() {
+    async init() {
         console.log("🚀 Inicializando App...");
         
         const sidebarContainer = document.querySelector(".list-conversations");
@@ -31,24 +33,169 @@ class ChatApp {
             return;
         }
 
-        this.sidebarRenderer = new SidebarRenderer(sidebarContainer);
+        const currentId = this.conversationService.getCurrentId();
+        this.sidebarRenderer = new SidebarRenderer(sidebarContainer, currentId);
         this.chatRenderer = new ChatRenderer(chatContainer);
 
-        this.loadInitialData();
-        this.bindEvents();
-    }
-
-    loadInitialData() {
-        const conversations = this.conversationService.load();
-        this.sidebarRenderer.render(conversations);
+        // 1. Cargar configuración y autenticación
+        await this.initializeFromAPI();
         
-        const currentId = this.conversationService.getCurrentId();
+        // 2. Renderizar sidebar con lo que tengamos
+        this.sidebarRenderer.render(this.conversationService.getAll());
+        
+        // 3. Cargar conversación actual si existe
+        console.log("📍 currentId al inicio:", currentId);
+        
         if (currentId) {
             const conv = this.conversationService.getById(currentId);
             if (conv) {
-                this.chatRenderer.render(conv);
-                this.sidebarRenderer.setCurrentId(currentId);
+                console.log("🔄 Cargando mensajes de conversación actual...");
+                await this.loadConversationMessages(currentId);
+            } else {
+                console.warn("⚠️ currentId no encontrado en la lista de conversaciones");
+                this.chatRenderer.render({ messages: [] });
             }
+        } else {
+            this.chatRenderer.render({ messages: [] });
+        }
+
+        this.bindEvents();
+    }
+
+    async initializeFromAPI() {
+        const token = localStorage.getItem('authToken');
+        const anonSessionId = localStorage.getItem('anonSessionId');
+        
+        if (token) {
+            this.isAuthenticated = true;
+            console.log("👤 Usuario autenticado, cargando desde API...");
+            try {
+                const [user, config, conversations] = await Promise.all([
+                    storageService.getUser(),
+                    storageService.getConfig(),
+                    storageService.getConversations()
+                ]);
+                
+                if (user) localStorage.setItem('user:cache', JSON.stringify(user));
+                
+                if (config) {
+                    localStorage.setItem('config:cache', JSON.stringify(config));
+                    configService.updateGlobal({ 
+                        theme: config.theme || 'system',
+                        streamSpeed: config.streamSpeed || 8,
+                        showTitle: config.showTitle !== false
+                    });
+                    this.applyTheme(config.theme || 'system');
+                }
+                
+                if (conversations) {
+                    this.conversationService.setAll(conversations);
+                    console.log(`✅ ${conversations.length} conversaciones cargadas para usuario autenticado`);
+                }
+            } catch (error) {
+                console.error("❌ Error cargando datos de usuario:", error);
+            }
+        } else {
+            console.log("👤 Usuario anónimo");
+            if (!anonSessionId) {
+                try {
+                    await storageService.createAnonSession();
+                    const newSessionId = localStorage.getItem('anonSessionId');
+                    if (newSessionId) {
+                        ToastNotification.info("Estás usando la app sin cuenta. Tu historial se guardará por 24 horas. ¡Regístrate para no perder tus conversaciones!");
+                    }
+                } catch (error) {
+                    console.error("Error creando sesión anónima:", error);
+                }
+            }
+            
+            const sessionId = localStorage.getItem('anonSessionId');
+            if (sessionId) {
+                try {
+                    const welcomeShown = await storageService.checkWelcomeShown(sessionId);
+                    if (!welcomeShown) {
+                        ToastNotification.info("Tu historial anónimo se guardará por 24 horas.");
+                        await storageService.setWelcomeShown(sessionId);
+                    }
+                    
+                    const conversations = await storageService.getConversations();
+                    if (conversations) {
+                        this.conversationService.setAll(conversations);
+                        console.log(`✅ ${conversations.length} conversaciones cargadas desde Redis`);
+                    }
+                } catch (error) {
+                    console.error("❌ Error cargando desde Redis:", error);
+                }
+            }
+        }
+    }
+
+    applyTheme(theme) {
+        const root = document.documentElement;
+        if (theme === 'dark') {
+            root.classList.add('dark');
+        } else if (theme === 'light') {
+            root.classList.remove('dark');
+        } else {
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                root.classList.add('dark');
+            } else {
+                root.classList.remove('dark');
+            }
+        }
+    }
+
+    loadInitialData() {
+        // Método mantenido por compatibilidad pero vacío ya que la lógica está en init()
+    }
+
+    async loadConversationMessages(id) {
+        const token = localStorage.getItem('authToken');
+        let messages = [];
+        
+        console.log(`[DEBUG] 📂 Iniciando loadConversationMessages para ID: ${id}`);
+        
+        try {
+            const apiMessages = await storageService.getMessages(id);
+            console.log(`[DEBUG] 📥 Mensajes brutos recibidos de la API para ${id}:`, apiMessages);
+
+            messages = apiMessages.map(msg => ({
+                question: msg.role === 'user' ? msg.content : null,
+                response: msg.role === 'assistant' || msg.role === 'ai' ? msg.content : null
+            }));
+            
+            console.log(`[DEBUG] 🔄 Mensajes mapeados para ${id}:`, messages);
+            
+            // Actualizar el estado local SIEMPRE
+            const conv = this.conversationService.getById(id);
+            if (conv) {
+                conv.messages = messages;
+                console.log(`[DEBUG] ✅ Estado local actualizado para ${id}. Total mensajes en objeto conv:`, conv.messages.length);
+            } else {
+                console.error(`[DEBUG] ❌ No se encontró la conversación ${id} en el service para asignar mensajes`);
+            }
+        } catch (error) {
+            console.error("[DEBUG] ❌ Error cargando mensajes de la API:", error);
+            const conv = this.conversationService.getById(id);
+            messages = conv?.messages || [];
+        }
+        
+        // Renderizar solo si sigue siendo la conversación actual
+        const currentId = this.conversationService.getCurrentId();
+        console.log(`[DEBUG] 📍 Comparando currentId (${currentId}) con id cargado (${id})`);
+
+        if (String(currentId) === String(id)) {
+            const conversationToRender = this.conversationService.getById(id);
+            if (conversationToRender) {
+                console.log(`[DEBUG] 🎨 Llamando a ChatRenderer.render para ${id} con ${conversationToRender.messages.length} mensajes`);
+                this.chatRenderer.render(conversationToRender);
+                this.sidebarRenderer.setCurrentId(id);
+                this.sidebarRenderer.render(this.conversationService.getAll());
+            } else {
+                console.error(`[DEBUG] ❌ Imposible renderizar: conversación ${id} no encontrada al final de la carga`);
+            }
+        } else {
+            console.warn(`[DEBUG] ⚠️ La conversación actual cambió durante la carga. No se renderiza ${id}`);
         }
     }
 
@@ -156,18 +303,40 @@ class ChatApp {
         }
     }
 
-    handleNewConversation() {
+    async handleNewConversation() {
         this.cancelRequest();
+        
+        const currentModel = configService.getCurrent();
+        
+        if (!currentModel || !currentModel.model || !currentModel.apiKey) {
+            ToastNotification.error("Debes configurar un modelo con API Key antes de chatear");
+            return;
+        }
 
-        const conversation = this.conversationService.create(
-            "Nueva conversación",
-            formatDateFriendly(new Date().toString())
-        );
+        try {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                const { count, max } = await storageService.getConversationCount();
+                if (count >= max) {
+                    ToastNotification.error(`Has alcanzado el límite de ${max} conversaciones. Archiva o elimina algunas para crear una nueva.`);
+                    return;
+                }
+            }
 
-        this.conversationService.setCurrent(conversation.id);
-        this.sidebarRenderer.render(this.conversationService.getAll());
-        this.chatRenderer.render(conversation);
-        this.sidebarRenderer.setCurrentId(conversation.id);
+            const conversation = await this.conversationService.create(
+                "Nueva conversación",
+                currentModel.model,
+                currentModel.provider || null
+            );
+            
+            this.conversationService.setCurrent(conversation.id);
+            this.sidebarRenderer.render(this.conversationService.getAll());
+            this.chatRenderer.render(conversation);
+            this.sidebarRenderer.setCurrentId(conversation.id);
+        } catch (error) {
+            console.error("Error creando conversación:", error);
+            ToastNotification.error(error.message || "No se pudo crear la conversación");
+        }
     }
 
     async handleActionClick() {
@@ -242,13 +411,34 @@ class ChatApp {
 
             const botResponse = result.respuesta || "No se pudo obtener respuesta";
             
-            // Actualizar el último mensaje (que es el placeholder) con la respuesta final procesada
+            // PERSISTENCIA REAL: Guardar en Postgres/Redis a través de la API
+            console.log("💾 Persistiendo mensajes en base de datos...");
+            try {
+                // El endpoint de sendMessage guarda tanto el mensaje del usuario como el del asistente
+                await storageService.sendMessage(currentId, value, config.model, {
+                    provider: config.provider || this.conversationService.getProviderFromModel(config.model),
+                    apiKey: config.apiKey,
+                    maxTokens: config.maxTokens,
+                    temperature: config.temperature,
+                    systemPrompt: config.systemPrompt,
+                    // Ya enviamos el request a /llm/q para el streaming, 
+                    // pero necesitamos guardar los textos finales en la DB.
+                    // El backend para anónimos espera que le pasemos el assistantMessage si ya lo tenemos
+                    // o lo puede generar él, pero aquí ya lo tenemos.
+                    assistantMessage: botResponse 
+                });
+                console.log("✅ Mensajes persistidos");
+            } catch (persistError) {
+                console.error("❌ Error persistiendo mensajes:", persistError);
+                // No detenemos el flujo si falla el guardado, pero lo avisamos en consola
+            }
+
+            // Actualizar el último mensaje local (el placeholder)
             if (currentId === this.conversationService.getCurrentId()) {
                 const conv = this.conversationService.getById(currentId);
                 if (conv && conv.messages.length > 0) {
                     const lastIndex = conv.messages.length - 1;
                     conv.messages[lastIndex].response = botResponse;
-                    this.conversationService.save();
                 }
             }
 
@@ -285,12 +475,14 @@ async processStreamResponse(url, data, signal, targetElement = null) {
             const streamSpeed = configService.getStreamSpeed();
             let buffer = ""; 
             
-            const writeNextChar = (element, text, delay) => {
+            const writeNextChunk = (element, htmlChunk, delay) => {
                 return new Promise((res) => {
+                    let currentHtml = element.innerHTML;
                     let index = 0;
                     const write = () => {
-                        if (index < text.length) {
-                            element.textContent += text.charAt(index);
+                        if (index < htmlChunk.length) {
+                            currentHtml += htmlChunk.charAt(index);
+                            element.innerHTML = currentHtml;
                             const container = element.parentElement;
                             if (container && container.classList.contains("messages-display")) {
                                 container.scrollTop = container.scrollHeight;
@@ -305,6 +497,8 @@ async processStreamResponse(url, data, signal, targetElement = null) {
                 });
             };
             
+            let isResolved = false;
+            
             const handleStream = async () => {
                 try {
                     console.log("📡 Realizando fetch...");
@@ -318,7 +512,10 @@ async processStreamResponse(url, data, signal, targetElement = null) {
                     if (!response.ok) {
                         const errorData = await response.json().catch(() => ({}));
                         console.error("❌ Error en respuesta HTTP:", response.status, errorData);
-                        reject(new Error(errorData.error || `HTTP ${response.status}`));
+                        if (!isResolved) {
+                            isResolved = true;
+                            reject(new Error(errorData.error || `HTTP ${response.status}`));
+                        }
                         return;
                     }
 
@@ -341,7 +538,10 @@ async processStreamResponse(url, data, signal, targetElement = null) {
                             
                             if (data.error) {
                                 console.error("❌ Error devuelto por la API:", data.error);
-                                reject(new Error(data.error));
+                                if (!isResolved) {
+                                    isResolved = true;
+                                    reject(new Error(data.error));
+                                }
                                 return;
                             }
                             
@@ -356,18 +556,21 @@ async processStreamResponse(url, data, signal, targetElement = null) {
                                     }
 
                                     if (el) {
-                                        await writeNextChar(el, data.chunk, streamSpeed);
+                                        await writeNextChunk(el, data.chunk, streamSpeed);
                                     }
                                 }
                             }
                             
                             if (data.done) {
                                 console.log("✅ Stream finalizado (data.done)");
-                                resolve({
-                                    respuesta: data.respuesta || fullResponse,
-                                    modelo: data.modelo,
-                                    tokens: data.tokens
-                                });
+                                if (!isResolved) {
+                                    isResolved = true;
+                                    resolve({
+                                        respuesta: data.respuesta || fullResponse,
+                                        modelo: data.modelo,
+                                        tokens: data.tokens
+                                    });
+                                }
                             }
                         } catch (e) {
                             console.warn("⚠️ Error parseando línea:", trimmedLine, e);
@@ -394,19 +597,48 @@ async processStreamResponse(url, data, signal, targetElement = null) {
                         }
                     }
 
-                    resolve({ respuesta: fullResponse });
+                    if (!isResolved) {
+                        isResolved = true;
+                        resolve({ respuesta: fullResponse });
+                    }
                 } catch (error) {
                     if (error.name === 'AbortError') {
                         console.log("🛑 Stream abortado por el usuario");
                     } else {
                         console.error("💥 Error en handleStream:", error);
-                        reject(error);
+                        if (!isResolved) {
+                            isResolved = true;
+                            reject(error);
+                        }
                     }
                 }
             };
 
             handleStream();
         });
+    }
+
+    stripHTML(html) {
+        if (!html) return "";
+        const tmp = document.createElement("DIV");
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || "";
+    }
+
+    cleanTitle(text) {
+        if (!text) return "Nueva conversación";
+        
+        let cleaned = this.stripHTML(text);
+        
+        // Limpiar markdown común que la IA pueda devolver en el título
+        cleaned = cleaned.trim()
+            .replace(/^["']|["']$/g, '') // Quitar comillas al inicio/final
+            .replace(/^\d+\.\s*/, '')     // Quitar numeración tipo "1. "
+            .replace(/[#*`_~]/g, '')     // Quitar caracteres de markdown
+            .replace(/\s+/g, ' ')         // Unificar espacios
+            .substring(0, 80);           // Limitar longitud
+            
+        return cleaned || "Nueva conversación";
     }
 
     async generateTitle(conversation, userQuestion, botResponse) {
@@ -423,37 +655,32 @@ async processStreamResponse(url, data, signal, targetElement = null) {
                 chatTitle.textContent = "Generando título...";
             }
 
-            const prompt = `Genera un título corto para esta conversación de entre 5 y 10 palabras. 
-Basado en la pregunta del usuario: "${userQuestion}" y la respuesta del bot: "${botResponse.substring(0, 200)}..."
-Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
+            const prompt = `Analiza este intercambio y crea un título descriptivo pero muy breve (máximo 5 palabras). 
+            Pregunta: "${userQuestion.substring(0, 100)}"
+            Respuesta: "${botResponse.substring(0, 100)}"
+            Responde ÚNICAMENTE con el título, sin comillas ni puntos finales.`;
 
             const requestData = {
                 input: prompt,
                 model: config.model,
                 apiKey: config.apiKey,
-                maxTokens: 50,
-                temperature: 0.5,
-                systemPrompt: config.systemPrompt || ""
+                maxTokens: 30,
+                temperature: 0.3, // Menos creatividad para el título
+                systemPrompt: "Eres un experto en resumir temas de conversación de forma concisa. Responde solo el título."
             };
 
             console.log("📡 Solicitando título a la API...");
             // Usamos targetElement = false para desactivar el typewriter en el chat
             const result = await this.processStreamResponse("/api/llm/q", requestData, null, false);
             
-            let title = result.respuesta || "";
-            console.log("📥 Título recibido (bruto):", title);
+            let rawTitle = result.respuesta || "";
+            console.log("📥 Título recibido (bruto):", rawTitle);
             
-            title = this.stripHTML(title);
-            title = title.trim()
-                .replace(/^["']|["']$/g, '')
-                .replace(/^\d+\.\s*/, '')
-                .replace(/\n/g, ' ')
-                .substring(0, 100) || "Conversación";
-
+            const title = this.cleanTitle(rawTitle);
             console.log("🏆 Título final procesado:", title);
 
-            this.conversationService.updateTitle(conversation.id, title);
-            this.conversationService.save();
+            await this.conversationService.updateTitle(conversation.id, title);
+            this.sidebarRenderer.setCurrentId(conversation.id);
             this.sidebarRenderer.render(this.conversationService.getAll());
             
             if (this.conversationService.getCurrentId() === conversation.id) {
@@ -480,7 +707,8 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
         const btnDelete = e.target.closest('.btn-delete-conversation');
         if (btnDelete) {
             e.stopPropagation();
-            this.showDeleteModal(parseInt(btnDelete.dataset.id));
+            const id = btnDelete.dataset.id;
+            this.showDeleteModal(id);
             return;
         }
 
@@ -494,20 +722,59 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
         this.cancelRequest();
 
         const titleEl = li.querySelector('.item-title');
-        const id = parseInt(titleEl.dataset.conversationId);
+        const id = titleEl.dataset.conversationId;
         
         this.conversationService.setCurrent(id);
         
-        const conversation = this.conversationService.getById(id);
+        this.loadConversationMessages(id);
+    }
+
+    async loadConversationMessages(id) {
+        const token = localStorage.getItem('authToken');
+        let messages = [];
+        
+        try {
+            if (token) {
+                const apiMessages = await storageService.getMessages(id);
+                messages = apiMessages.map(msg => ({
+                    question: msg.role === 'user' ? msg.content : null,
+                    response: msg.role === 'ai' || msg.role === 'assistant' ? msg.content : null
+                }));
+                const conv = this.conversationService.getById(id);
+                if (conv) {
+                    conv.messages = messages;
+                }
+            } else {
+                const anonSessionId = localStorage.getItem('anonSessionId');
+                if (anonSessionId) {
+                    const anonMessages = await storageService._fetch(`/anon/conversations/${anonSessionId}/${id}/messages`);
+                    messages = anonMessages;
+                }
+                const conv = this.conversationService.getById(id);
+                if (conv) {
+                    conv.messages = messages;
+                }
+                messages = conv?.messages || [];
+            }
+        } catch (error) {
+            console.error("Error cargando mensajes:", error);
+            const conv = this.conversationService.getById(id);
+            messages = conv?.messages || [];
+        }
+        
+        const conversation = this.conversationService.getById(this.conversationService.getCurrentId());
         if (conversation) {
             this.chatRenderer.render(conversation);
-            this.sidebarRenderer.setCurrentId(id);
+            this.sidebarRenderer.setCurrentId(conversation.id);
             this.sidebarRenderer.render(this.conversationService.getAll());
         }
     }
 
     showDeleteModal(id) {
-        if (this.conversationService.getCurrentId() === id) {
+        const currentId = this.conversationService.getCurrentId();
+        const isCurrent = currentId && String(currentId) === String(id);
+        
+        if (isCurrent) {
             this.cancelRequest();
         }
 
@@ -518,7 +785,7 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
             this.conversationService.delete(id);
             this.sidebarRenderer.render(this.conversationService.getAll());
             
-            if (this.conversationService.getCurrentId() === id) {
+            if (isCurrent) {
                 this.chatRenderer.clear();
                 this.conversationService.setCurrent(null);
             }
@@ -542,7 +809,8 @@ Responde SOLO con el título, sin comillas, sin números, sin texto adicional.`;
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     const app = new ChatApp();
-    app.init();
+    await app.init();
+    window.chatApp = app;
 });

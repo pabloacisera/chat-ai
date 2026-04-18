@@ -1,5 +1,7 @@
 import { configService } from "../services/ConfigService.js";
 import { ToastNotification } from "./ToastNotification.js";
+import { storageService } from "../services/StorageService.js";
+import { conversationService } from "../services/ConversationService.js";
 
 const MODELOS_DISPONIBLES = [
     { key: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
@@ -418,6 +420,30 @@ templateConfig.innerHTML = `
                 </div>
             </form>
             
+            <div class="section-divider"></div>
+            
+            <h3>📂 Gestionar Conversaciones</h3>
+            <div class="form">
+                <div id="conversation-manager" style="display: none;">
+                    <div class="conversation-list-container">
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 0.8rem; color: #666;">
+                                <input type="checkbox" id="select-all-convs"> Seleccionar todas
+                            </label>
+                        </div>
+                        <div id="conversation-list" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 8px;">
+                        </div>
+                    </div>
+                    <div class="actions" style="flex-direction: row; gap: 10px; margin-top: 10px;">
+                        <button type="button" id="btn-archive-selected" class="btn-action-convs" style="background: #17a2b8; color: white; padding: 8px 12px; font-size: 0.8rem;">📦 Archivar</button>
+                        <button type="button" id="btn-delete-selected" class="btn-action-convs" style="background: #dc3545; color: white; padding: 8px 12px; font-size: 0.8rem;">🗑️ Eliminar</button>
+                    </div>
+                </div>
+                <div id="no-conversations-msg" class="empty-keys" style="color: #999; font-size: 0.85rem; padding: 10px;">
+                    Carga las conversaciones desde el panel principal
+                </div>
+            </div>
+            
             <div class="actions">
                 <button type="button" id="btn-save">💾 Guardar</button>
                 <button type="button" id="btn-cancel">❌ Cancelar</button>
@@ -461,9 +487,138 @@ export class ConfigChatModal extends HTMLElement {
     loadSavedConfig() {
         this.configChat = configService.getCurrent();
         this.globalConfig = configService.getGlobal();
+        this.conversations = [];
     }
 
-    render() {
+    getProviderFromModel(model) {
+        const providers = {
+            'gemini-2.5-flash': 'google',
+            'mistral-small': 'mistral',
+            'llama-3.3-70b-versatile': 'groq',
+            'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo': 'groq'
+        };
+        return providers[model] || 'google';
+    }
+
+    async loadConversationsFromAPI() {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+        
+        try {
+            this.conversations = await storageService.getConversations();
+        } catch (error) {
+            console.error("Error cargando conversaciones:", error);
+            this.conversations = [];
+        }
+    }
+
+    renderConversationsManager() {
+        const manager = this.shadowRoot.querySelector("#conversation-manager");
+        const noConvsMsg = this.shadowRoot.querySelector("#no-conversations-msg");
+        const convList = this.shadowRoot.querySelector("#conversation-list");
+        const selectAll = this.shadowRoot.querySelector("#select-all-convs");
+        
+        if (!this.conversations || this.conversations.length === 0) {
+            if (manager) manager.style.display = "none";
+            if (noConvsMsg) noConvsMsg.style.display = "block";
+            return;
+        }
+        
+        if (manager) manager.style.display = "block";
+        if (noConvsMsg) noConvsMsg.style.display = "none";
+        
+        convList.innerHTML = "";
+        
+        this.conversations.forEach(conv => {
+            const div = document.createElement("div");
+            div.style.cssText = "display: flex; align-items: center; gap: 8px; padding: 6px; border-bottom: 1px solid #eee;";
+            div.innerHTML = `
+                <input type="checkbox" class="conv-checkbox" value="${conv.id}" style="cursor: pointer;">
+                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;">${conv.title || 'Sin título'}</span>
+            `;
+            convList.appendChild(div);
+        });
+        
+        selectAll?.addEventListener("change", (e) => {
+            const checkboxes = convList.querySelectorAll(".conv-checkbox");
+            checkboxes.forEach(cb => cb.checked = e.target.checked);
+        });
+        
+        this.shadowRoot.querySelector("#btn-archive-selected")?.addEventListener("click", () => this.archiveSelectedConversations());
+        this.shadowRoot.querySelector("#btn-delete-selected")?.addEventListener("click", () => this.deleteSelectedConversations());
+    }
+
+    async archiveSelectedConversations() {
+        const checkboxes = this.shadowRoot.querySelectorAll(".conv-checkbox:checked");
+        const ids = Array.from(checkboxes).map(cb => cb.value);
+        
+        if (ids.length === 0) {
+            ToastNotification.warning("Selecciona al menos una conversación");
+            return;
+        }
+        
+        try {
+            await fetch('/api/conversations/archive', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ conversationIds: ids })
+            });
+            
+            this.conversations = this.conversations.filter(c => !ids.includes(c.id));
+            this.renderConversationsManager();
+            
+            const convService = window.chatApp?.conversationService;
+            if (convService) {
+                convService.load();
+                window.chatApp?.sidebarRenderer?.render(convService.getAll());
+            }
+            
+            ToastNotification.success(`${ids.length} conversación(es) archivada(s)`);
+        } catch (error) {
+            console.error("Error archivando:", error);
+            ToastNotification.error("Error al archivar conversaciones");
+        }
+    }
+
+    async deleteSelectedConversations() {
+        const checkboxes = this.shadowRoot.querySelectorAll(".conv-checkbox:checked");
+        const ids = Array.from(checkboxes).map(cb => cb.value);
+        
+        if (ids.length === 0) {
+            ToastNotification.warning("Selecciona al menos una conversación");
+            return;
+        }
+        
+        try {
+            await fetch('/api/conversations/delete/bulk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                },
+                body: JSON.stringify({ conversationIds: ids })
+            });
+            
+            this.conversations = this.conversations.filter(c => !ids.includes(c.id));
+            this.renderConversationsManager();
+            
+            const convService = window.chatApp?.conversationService;
+            if (convService) {
+                convService.load();
+                window.chatApp?.sidebarRenderer?.render(convService.getAll());
+            }
+            
+            ToastNotification.success(`${ids.length} conversación(es) eliminada(s)`);
+        } catch (error) {
+            console.error("Error eliminando:", error);
+            ToastNotification.error("Error al eliminar conversaciones");
+        }
+    }
+
+render() {
         this.shadowRoot.innerHTML = "";
         this.shadowRoot.appendChild(templateConfig.content.cloneNode(true));
         
@@ -472,11 +627,13 @@ export class ConfigChatModal extends HTMLElement {
         this.renderKeysTable();
         this.setupConfigEvents();
 
-        // Forzar marcado del check por si acaso hay alguna demora en el Shadow DOM
+        this.loadConversationsFromAPI().then(() => {
+            this.renderConversationsManager();
+        });
+
         const showTitleInput = this.shadowRoot.querySelector("#show-title");
         const globalConfig = configService.getGlobal();
         if (showTitleInput) {
-            // Si no existe explícitamente como false, lo marcamos
             showTitleInput.checked = globalConfig.showTitle !== false;
         }
     }
@@ -696,7 +853,7 @@ export class ConfigChatModal extends HTMLElement {
             }
         });
 
-        saveButton?.addEventListener("click", () => {
+        saveButton?.addEventListener("click", async () => {
             const model = modelSelect?.value;
             const apiKey = apiKeyInput?.value;
             const maxTokens = this.shadowRoot.querySelector("#max-tokens")?.value;
@@ -716,6 +873,34 @@ export class ConfigChatModal extends HTMLElement {
             } else if (!apiKey) {
                 ToastNotification.warning("Debes ingresar tu API key");
                 return;
+            }
+
+            const isAuthenticated = !!localStorage.getItem('authToken');
+
+            if (isAuthenticated) {
+                try {
+                    await storageService.addModel({
+                        modelId: model,
+                        provider: this.getProviderFromModel(model),
+                        apiKey: finalApiKey,
+                        maxTokens: maxTokens ? parseInt(maxTokens) : 1000,
+                        temperature: temperature ? parseFloat(temperature) : 0.7,
+                        systemPrompt: systemPrompt || ""
+                    });
+                } catch (error) {
+                    console.error("Error sincronizando modelo con API:", error);
+                }
+
+                try {
+                    await storageService.updateConfig({
+                        theme: this.globalConfig.theme || 'system',
+                        activeModelId: model,
+                        streamSpeed: streamSpeed ? parseInt(streamSpeed) : 8,
+                        showTitle: showTitle !== false
+                    });
+                } catch (error) {
+                    console.error("Error sincronizando config con API:", error);
+                }
             }
 
             configService.add(model, {

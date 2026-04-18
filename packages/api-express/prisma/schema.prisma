@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  name          String?
+  googleId      String?        @unique
+  avatar        String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  isDeleted     Boolean        @default(false)
+  sessions      Session[]
+  conversations Conversation[]
+  config        UserConfig?
+  modelConfigs  ModelConfig[]
+  migrationLog  MigrationLog[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ModelConfig {
+  id           String   @id @default(uuid())
+  userId       String
+  modelId      String
+  provider     String
+  apiKeyEnc    String
+  maxTokens    Int?
+  temperature  Float?
+  systemPrompt String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, modelId])
+}
+
+model UserConfig {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  theme         String   @default("system")
+  activeModelId String?
+  language      String   @default("es")
+  streamSpeed   Int      @default(8)
+  showTitle     Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id         String    @id @default(uuid())
+  userId     String
+  title      String
+  modelId    String
+  provider   String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  isDeleted  Boolean   @default(false)
+  isArchived Boolean   @default(false)
+  messages   Message[]
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  role           String
+  content        String
+  createdAt      DateTime     @default(now())
+  isDeleted      Boolean      @default(false)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model MigrationLog {
+  id           String   @id @default(uuid())
+  userId       String
+  anonSessionId String
+  migratedAt   DateTime @default(now())
+  convCount    Int
+  messageCount Int
+  status       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

@@ -3,6 +3,17 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+
+import authRoutes from './routes/auth.routes.js';
+import usersRoutes from './routes/users.routes.js';
+import modelsRoutes from './routes/models.routes.js';
+import conversationsRoutes from './routes/conversations.routes.js';
+import messagesRoutes from './routes/messages.routes.js';
+import anonRoutes from './routes/anon.routes.js';
+import syncRoutes from './routes/sync.routes.js';
+import archiveRoutes from './routes/archive.routes.js';
+import errorHandler from './middleware/errorHandler.js';
+
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { ChatGroq } from "@langchain/groq";
@@ -16,46 +27,84 @@ const PORT = process.env.EXPRESS_PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const MODEL_DEFAULTS: Record<string, { maxTokens: number; temperature: number }> = {
+const MODEL_DEFAULTS = {
   "gemini-2.5-flash": { maxTokens: 4096, temperature: 0.7 },
   "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo": { maxTokens: 4096, temperature: 0.7 },
   "llama-3.3-70b-versatile": { maxTokens: 4096, temperature: 0.7 },
   "mistral-small": { maxTokens: 4096, temperature: 0.7 }
 };
 
-app.post('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-
-const simpleMarkdownToHTML = (text: string): string => {
+const simpleMarkdownToHTML = (text) => {
   if (!text || typeof text !== 'string') return text;
   
   let html = text;
+
+  html = html.replace(/&/g, '&amp;');
   
-  html = html.replace(/[&<>]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    return m;
+  html = html.replace(/\*\*(.*?)\*\*/g, '~~MARK~~strong~~MARK~~$1~~MARK~~/strong~~MARK~~');
+  html = html.replace(/\*(.*?)\*/g, '~~MARK~~em~~MARK~~$1~~MARK~~/em~~MARK~~');
+  
+  html = html.replace(/^### (.+)$/gm, '~~MARK~~h3~~MARK~~$1~~MARK~~/h3~~MARK~~');
+  html = html.replace(/^## (.+)$/gm, '~~MARK~~h2~~MARK~~$1~~MARK~~/h2~~MARK~~');
+  html = html.replace(/^# (.+)$/gm, '~~MARK~~h1~~MARK~~$1~~MARK~~/h1~~MARK~~');
+  
+  html = html.replace(/^(\d+)\.\s+(.+)$/gm, '~~MARK~~li~~MARK~~$2~~MARK~~/li~~MARK~~');
+  html = html.replace(/(~~MARK~~li~~MARK~~.*?~~MARK~~\/li~~MARK~~\n?)+/g, (match) => {
+    return '~~MARK~~ol~~MARK~~' + match.replace(/~~MARK~~li~~MARK~~/g, '').replace(/~~MARK~~\/li~~MARK~~/g, '') + '~~MARK~~/ol~~MARK~~';
   });
   
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-  html = html.replace(/^(\d+)\.\s+(.*)$/gm, '<li>$2</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ol>$&</ol>');
-  html = html.replace(/^[-*]\s+(.*)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-  html = html.replace(/\n\n/g, '</p><p>');
-  html = html.replace(/\n/g, '<br>');
+  html = html.replace(/^[-*]\s+(.+)$/gm, '~~MARK~~li~~MARK~~$1~~MARK~~/li~~MARK~~');
+  html = html.replace(/(~~MARK~~li~~MARK~~.*?~~MARK~~\/li~~MARK~~\n?)+/g, (match) => {
+    return '~~MARK~~ul~~MARK~~' + match.replace(/~~MARK~~li~~MARK~~/g, '').replace(/~~MARK~~\/li~~MARK~~/g, '') + '~~MARK~~/ul~~MARK~~';
+  });
+
+  html = html.replace(/---/g, '~~MARK~~hr~~MARK~~');
   
-  if (!html.startsWith('<p>') && !html.startsWith('<ul>') && !html.startsWith('<ol>')) {
+  html = html.replace(/\n\n/g, '~~MARK~~br~~MARK~~~~MARK~~br~~MARK~~');
+  html = html.replace(/\n/g, ' ');
+  
+  html = html
+    .replace(/~~MARK~~strong~~MARK~~/g, '<strong>')
+    .replace(/~~MARK~~\/strong~~MARK~~/g, '</strong>')
+    .replace(/~~MARK~~em~~MARK~~/g, '<em>')
+    .replace(/~~MARK~~\/em~~MARK~~/g, '</em>')
+    .replace(/~~MARK~~h1~~MARK~~/g, '<h1>')
+    .replace(/~~MARK~~\/h1~~MARK~~/g, '</h1>')
+    .replace(/~~MARK~~h2~~MARK~~/g, '<h2>')
+    .replace(/~~MARK~~\/h2~~MARK~~/g, '</h2>')
+    .replace(/~~MARK~~h3~~MARK~~/g, '<h3>')
+    .replace(/~~MARK~~\/h3~~MARK~~/g, '</h3>')
+    .replace(/~~MARK~~li~~MARK~~/g, '<li>')
+    .replace(/~~MARK~~\/li~~MARK~~/g, '</li>')
+    .replace(/~~MARK~~ol~~MARK~~/g, '<ol>')
+    .replace(/~~MARK~~\/ol~~MARK~~/g, '</ol>')
+    .replace(/~~MARK~~ul~~MARK~~/g, '<ul>')
+    .replace(/~~MARK~~\/ul~~MARK~~/g, '</ul>')
+    .replace(/~~MARK~~br~~MARK~~/g, '<br>')
+    .replace(/~~MARK~~hr~~MARK~~/g, '<hr>');
+
+  if (!html.startsWith('<h1>') && !html.startsWith('<h2>') && !html.startsWith('<h3>') && 
+      !html.startsWith('<ul>') && !html.startsWith('<ol>') && !html.startsWith('<p>')) {
     html = `<p>${html}</p>`;
   }
   
   return html;
 };
 
-app.post("/llm/q", async (req, res) => {
+app.post('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/models', modelsRoutes);
+app.use('/api/conversations', conversationsRoutes);
+app.use('/api/messages', messagesRoutes);
+app.use('/api/anon', anonRoutes);
+app.use('/api/sync', syncRoutes);
+app.use('/api/archive', archiveRoutes);
+
+app.post("/api/llm/q", async (req, res) => {
   const { input, model, apiKey, maxTokens, temperature, systemPrompt } = req.body;
   
   if (!input) {
@@ -85,7 +134,7 @@ app.post("/llm/q", async (req, res) => {
         apiKey: apiKey,
         maxOutputTokens: finalMaxTokens,
         temperature: finalTemperature,
-        maxRetries: 0 // No reintentar para evitar timeouts si no hay cuota
+        maxRetries: 0
       });
     } else if (model === "mistral-small") {
       llm = new ChatMistralAI({
@@ -128,11 +177,12 @@ app.post("/llm/q", async (req, res) => {
       if (text) {
         fullResponse += text;
         tokenCount++;
-        res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
+        const htmlChunk = simpleMarkdownToHTML(text);
+        res.write(`data: ${JSON.stringify({ chunk: htmlChunk })}\n\n`);
       }
     }
     
-    const processedAnswer = simpleMarkdownToHTML(fullResponse);
+    const processedAnswer = fullResponse;
     res.write(`data: ${JSON.stringify({ 
       done: true, 
       respuesta: processedAnswer,
@@ -149,6 +199,8 @@ app.post("/llm/q", async (req, res) => {
     res.end();
   }
 });
+
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

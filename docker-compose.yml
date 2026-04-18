@@ -3,6 +3,11 @@ services:
     image: nginx:alpine
     container_name: nginx-gateway
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.20'
+          memory: 64M
     ports:
       - "80:80"
       - "443:443"
@@ -17,10 +22,48 @@ services:
     networks:
       - internal
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-chat
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'     # Postgres puede ser intenso en disco/cpu
+          memory: 256M    # Suficiente para desarrollo local
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-chatuser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-chatpass123}
+      - POSTGRES_DB=${POSTGRES_DB:-chatdb}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-chat
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.20'
+          memory: 128M    # Redis es ligero, esto sobra
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+
   n8n:
     image: n8nio/n8n:1.68.0
     container_name: n8n-container
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'     # n8n es pesado al ejecutar workflows
+          memory: 1G      # n8n basado en Node necesita aire
     ports:
       - "5678:5678"
     environment:
@@ -29,9 +72,6 @@ services:
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
       - GENERIC_TIMEZONE=${TIMEZONE:-America/Argentina/Buenos_Aires}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-secret_key_for_testing_with_32chars}
-      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-false}
-      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-123456}
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
@@ -41,6 +81,11 @@ services:
     build: ./packages/api-express
     container_name: api-express
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
     volumes:
       - ./packages/api-express:/app
       - /app/node_modules
@@ -48,13 +93,14 @@ services:
     environment:
       - NODE_ENV=development
       - EXPRESS_PORT=3001
-      - TS_NODE_TRANSPILE_ONLY=true
-    expose:
-      - "3001"
+      - TS_NODE_TRANSPILE_ONLY=true # Esto ayuda mucho a la CPU
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-chatuser}:${POSTGRES_PASSWORD:-chatpass123}@postgres:5432/${POSTGRES_DB:-chatdb}
     networks:
       - internal
     depends_on:
       - n8n
+      - postgres
+      - redis
 
 networks:
   internal:
@@ -62,3 +108,5 @@ networks:
 
 volumes:
   n8n_data:
+  postgres_data:
+  redis_data:
