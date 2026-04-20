@@ -364,6 +364,22 @@ html,body {
     font-size: 0.95rem;
 }
 
+/* Empty chat - sin conversación activa */
+.empty-chat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #757575;
+    text-align: center;
+    padding: 40px;
+}
+
+.empty-chat .empty-state {
+    height: 100%;
+}
+
 /* Chat title */
 .chat-title {
     font-size: 13px;

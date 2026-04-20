@@ -53,10 +53,10 @@ class ChatApp {
                 await this.loadConversationMessages(currentId);
             } else {
                 console.warn("⚠️ currentId no encontrado en la lista de conversaciones");
-                this.chatRenderer.render({ messages: [] });
+                this.chatRenderer.render(null, false, false);
             }
         } else {
-            this.chatRenderer.render({ messages: [] });
+            this.chatRenderer.render(null, false, false);
         }
 
         this.bindEvents();
@@ -97,7 +97,9 @@ class ChatApp {
             }
         } else {
             console.log("👤 Usuario anónimo");
-            if (!anonSessionId) {
+            const sessionId = localStorage.getItem('anonSessionId');
+            
+            if (!sessionId) {
                 try {
                     await storageService.createAnonSession();
                     const newSessionId = localStorage.getItem('anonSessionId');
@@ -107,10 +109,7 @@ class ChatApp {
                 } catch (error) {
                     console.error("Error creando sesión anónima:", error);
                 }
-            }
-            
-            const sessionId = localStorage.getItem('anonSessionId');
-            if (sessionId) {
+            } else {
                 try {
                     const welcomeShown = await storageService.checkWelcomeShown(sessionId);
                     if (!welcomeShown) {
@@ -188,7 +187,7 @@ class ChatApp {
             const conversationToRender = this.conversationService.getById(id);
             if (conversationToRender) {
                 console.log(`[DEBUG] 🎨 Llamando a ChatRenderer.render para ${id} con ${conversationToRender.messages.length} mensajes`);
-                this.chatRenderer.render(conversationToRender);
+                this.chatRenderer.render(conversationToRender, false, true);
                 this.sidebarRenderer.setCurrentId(id);
                 this.sidebarRenderer.render(this.conversationService.getAll());
             } else {
@@ -331,7 +330,7 @@ class ChatApp {
             
             this.conversationService.setCurrent(conversation.id);
             this.sidebarRenderer.render(this.conversationService.getAll());
-            this.chatRenderer.render(conversation);
+            this.chatRenderer.render(conversation, false, true);
             this.sidebarRenderer.setCurrentId(conversation.id);
         } catch (error) {
             console.error("Error creando conversación:", error);
@@ -378,7 +377,7 @@ class ChatApp {
         
         // Agregar mensaje de usuario al estado y renderizar
         this.conversationService.addMessage(currentId, { question: value });
-        this.chatRenderer.render(conversation, true);
+        this.chatRenderer.render(conversation, true, true);
         
         // Agregar placeholder de respuesta al estado y obtener elemento del DOM para streaming
         this.conversationService.addMessage(currentId, { response: "" });
@@ -764,7 +763,7 @@ async processStreamResponse(url, data, signal, targetElement = null) {
         
         const conversation = this.conversationService.getById(this.conversationService.getCurrentId());
         if (conversation) {
-            this.chatRenderer.render(conversation);
+            this.chatRenderer.render(conversation, false, true);
             this.sidebarRenderer.setCurrentId(conversation.id);
             this.sidebarRenderer.render(this.conversationService.getAll());
         }

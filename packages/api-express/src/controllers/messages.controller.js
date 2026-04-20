@@ -1,5 +1,6 @@
 import * as messagesService from '../services/messages.service.js';
 import * as aiService from '../services/ai.service.js';
+import * as memoryService from '../services/memory.service.js';
 
 export async function sendMessage(req, res, next) {
   try {
@@ -19,11 +20,12 @@ export async function sendMessage(req, res, next) {
     let fullResponse = providedAssistantMessage;
 
     if (!fullResponse) {
+      const history = await memoryService.buildContext(conversationId);
       fullResponse = await aiService.callAI(content, conversation.modelId, apiKey, {
         maxTokens: maxTokens || defaults.maxTokens,
         temperature: temperature ?? defaults.temperature,
         systemPrompt
-      });
+      }, history);
     }
 
     const assistantMessage = await messagesService.saveAssistantMessage(conversationId, fullResponse);
@@ -37,6 +39,14 @@ export async function sendMessage(req, res, next) {
         title: conversation.title,
         modelId: conversation.modelId
       }
+    });
+
+    setImmediate(() => {
+      memoryService.updateSummaryIfNeeded(
+        conversationId,
+        conversation.modelId,
+        apiKey
+      ).catch(err => console.error('Error actualizando summary:', err));
     });
   } catch (error) {
     next(error);

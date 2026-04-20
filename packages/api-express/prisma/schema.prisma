@@ -63,17 +63,20 @@ model UserConfig {
 }
 
 model Conversation {
-  id         String    @id @default(uuid())
-  userId     String
-  title      String
-  modelId    String
-  provider   String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  isDeleted  Boolean   @default(false)
-  isArchived Boolean   @default(false)
-  messages   Message[]
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(uuid())
+  userId                String
+  title                 String
+  modelId               String
+  provider              String
+  summary               String?
+  summaryUpdatedAt     DateTime?
+  messageCountAtLastSummary Int?   @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  isDeleted             Boolean   @default(false)
+  isArchived            Boolean   @default(false)
+  messages              Message[]
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Message {

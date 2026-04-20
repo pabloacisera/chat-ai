@@ -1,7 +1,7 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { ChatGroq } from "@langchain/groq";
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 
 const MODEL_DEFAULTS = {
   "gemini-2.5-flash": { maxTokens: 4096, temperature: 0.7 },
@@ -10,7 +10,7 @@ const MODEL_DEFAULTS = {
   "mistral-small": { maxTokens: 4096, temperature: 0.7 }
 };
 
-export async function callAI(input, model, apiKey, options = {}) {
+export async function callAI(input, model, apiKey, options = {}, history = []) {
   const defaults = MODEL_DEFAULTS[model] || { maxTokens: 4096, temperature: 0.7 };
   const maxTokens = options.maxTokens || defaults.maxTokens;
   const temperature = options.temperature ?? defaults.temperature;
@@ -20,6 +20,15 @@ export async function callAI(input, model, apiKey, options = {}) {
   if (systemPrompt && systemPrompt.trim()) {
     messages.push(new SystemMessage(systemPrompt));
   }
+
+  for (const msg of history) {
+    if (msg.role === 'user') {
+      messages.push(new HumanMessage(msg.content));
+    } else {
+      messages.push(new AIMessage(msg.content));
+    }
+  }
+
   messages.push(new HumanMessage(input));
 
   let llm;

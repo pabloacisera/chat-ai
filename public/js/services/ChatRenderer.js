@@ -10,13 +10,24 @@ export class ChatRenderer {
         }
     }
 
-    render(conversation, preserveScroll = false) {
-        console.log(`[DEBUG] 🖼️ Renderizando conversación:`, conversation?.id);
+    render(conversation, preserveScroll = false, hasActiveConversation = false) {
+        console.log(`[DEBUG] 🖼️ Renderizando conversación:`, conversation?.id, { hasActiveConversation });
         
         if (!this.container) return;
         this.clear();
 
-        if (!conversation) return;
+        if (!hasActiveConversation) {
+            const emptyChat = document.createElement("div");
+            emptyChat.classList.add("empty-chat");
+            emptyChat.innerHTML = `
+                <div class="empty-state">
+                    <h2>Selecciona una conversación</h2>
+                    <p>O crea una nueva para comenzar</p>
+                </div>
+            `;
+            this.container.appendChild(emptyChat);
+            return;
+        }
 
         const chatWindow = document.createElement("div");
         chatWindow.classList.add("chat-window");
@@ -27,13 +38,13 @@ export class ChatRenderer {
         // 1. Título
         const titleChat = document.createElement("p");
         titleChat.classList.add("chat-title");
-        titleChat.textContent = (conversation.title || "Nueva conversación").replace(/<[^>]+>/g, '');
+        titleChat.textContent = (conversation?.title || "Nueva conversación").replace(/<[^>]+>/g, '');
 
         // 2. Pantalla de mensajes
         const messagesDisplay = document.createElement("div");
         messagesDisplay.classList.add("messages-display");
 
-        const messages = conversation.messages || [];
+        const messages = conversation?.messages || [];
 
         if (messages.length === 0) {
             messagesDisplay.innerHTML = `

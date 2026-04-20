@@ -96,14 +96,23 @@ export async function sendMessage(req, res, next) {
     messages.push(userMessage);
 
     let fullResponse = providedAssistantMessage;
-    
+
+    const UMBRAL = 10;
+    let history = [];
+
+    if (messages.length <= UMBRAL) {
+      history = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+    } else {
+      history = messages.slice(-7, -1).map(m => ({ role: m.role, content: m.content }));
+    }
+
     if (!fullResponse) {
       const { callAI } = await import('../services/ai.service.js');
       fullResponse = await callAI(content, modelId, apiKey, {
         maxTokens: maxTokens || 4096,
         temperature: temperature ?? 0.7,
         systemPrompt
-      });
+      }, history);
     }
 
     const assistantMessage = {
