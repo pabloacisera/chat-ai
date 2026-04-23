@@ -501,11 +501,16 @@ export class ConfigChatModal extends HTMLElement {
     }
 
     async loadConversationsFromAPI() {
-        const token = localStorage.getItem('authToken');
-        if (!token) return;
-        
         try {
-            this.conversations = await storageService.getConversations();
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                this.conversations = await storageService.getConversations();
+            } else {
+                const sessionId = localStorage.getItem('anonSessionId');
+                this.conversations = sessionId
+                    ? await storageService._fetch(`/anon/conversations/${sessionId}`)
+                    : [];
+            }
         } catch (error) {
             console.error("Error cargando conversaciones:", error);
             this.conversations = [];
@@ -551,32 +556,36 @@ export class ConfigChatModal extends HTMLElement {
     async archiveSelectedConversations() {
         const checkboxes = this.shadowRoot.querySelectorAll(".conv-checkbox:checked");
         const ids = Array.from(checkboxes).map(cb => cb.value);
-        
-        if (ids.length === 0) {
-            ToastNotification.warning("Selecciona al menos una conversación");
-            return;
-        }
-        
+        if (ids.length === 0) { ToastNotification.warning("Selecciona al menos una conversación"); return; }
+
+        const token = localStorage.getItem('authToken');
+        const anonSessionId = localStorage.getItem('anonSessionId');
+
         try {
-            await fetch('/api/conversations/archive', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({ conversationIds: ids })
-            });
-            
-            this.conversations = this.conversations.filter(c => !ids.includes(c.id));
+            if (token) {
+                await fetch('/api/conversations/archive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ conversationIds: ids })
+                });
+                ToastNotification.success(`${ids.length} conversación(es) archivada(s)`);
+            } else if (anonSessionId) {
+                for (const id of ids) {
+                    await storageService._fetch(`/anon/conversations/${anonSessionId}/${id}`, 'DELETE');
+                }
+                ToastNotification.info("Las conversaciones anónimas no se pueden archivar, fueron eliminadas.");
+            }
+
+            this.conversations = this.conversations.filter(c => !ids.includes(String(c.id)));
             this.renderConversationsManager();
-            
+
             const convService = window.chatApp?.conversationService;
             if (convService) {
-                convService.load();
+                ids.forEach(id => {
+                    convService.conversations = convService.conversations.filter(c => String(c.id) !== String(id));
+                });
                 window.chatApp?.sidebarRenderer?.render(convService.getAll());
             }
-            
-            ToastNotification.success(`${ids.length} conversación(es) archivada(s)`);
         } catch (error) {
             console.error("Error archivando:", error);
             ToastNotification.error("Error al archivar conversaciones");
@@ -586,31 +595,40 @@ export class ConfigChatModal extends HTMLElement {
     async deleteSelectedConversations() {
         const checkboxes = this.shadowRoot.querySelectorAll(".conv-checkbox:checked");
         const ids = Array.from(checkboxes).map(cb => cb.value);
-        
-        if (ids.length === 0) {
-            ToastNotification.warning("Selecciona al menos una conversación");
-            return;
-        }
-        
+        if (ids.length === 0) { ToastNotification.warning("Selecciona al menos una conversación"); return; }
+
+        const token = localStorage.getItem('authToken');
+        const anonSessionId = localStorage.getItem('anonSessionId');
+
         try {
-            await fetch('/api/conversations/delete/bulk', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                },
-                body: JSON.stringify({ conversationIds: ids })
-            });
-            
-            this.conversations = this.conversations.filter(c => !ids.includes(c.id));
+            if (token) {
+                await fetch('/api/conversations/delete/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ conversationIds: ids })
+                });
+            } else if (anonSessionId) {
+                for (const id of ids) {
+                    await storageService._fetch(`/anon/conversations/${anonSessionId}/${id}`, 'DELETE');
+                }
+            }
+
+            this.conversations = this.conversations.filter(c => !ids.includes(String(c.id)));
             this.renderConversationsManager();
-            
+
             const convService = window.chatApp?.conversationService;
             if (convService) {
-                convService.load();
+                ids.forEach(id => {
+                    convService.conversations = convService.conversations.filter(c => String(c.id) !== String(id));
+                });
                 window.chatApp?.sidebarRenderer?.render(convService.getAll());
+                const currentId = convService.getCurrentId();
+                if (currentId && ids.includes(String(currentId))) {
+                    convService.setCurrent(null);
+                    window.chatApp?.chatRenderer?.clear?.();
+                }
             }
-            
+
             ToastNotification.success(`${ids.length} conversación(es) eliminada(s)`);
         } catch (error) {
             console.error("Error eliminando:", error);

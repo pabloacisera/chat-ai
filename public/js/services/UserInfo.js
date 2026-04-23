@@ -63,6 +63,7 @@ class UserService {
             try {
                 await storageService.migrateAnonData(anonSessionId);
                 localStorage.removeItem('anonSessionId');
+                storageService.clearCache();
             } catch (e) {
                 console.error("Error migrando datos anónimos:", e);
             }
@@ -143,6 +144,7 @@ class UserService {
             try {
                 await storageService.migrateAnonData(anonSessionId);
                 localStorage.removeItem('anonSessionId');
+                storageService.clearCache();
             } catch (e) {
                 console.error("Error migrando datos anónimos:", e);
             }

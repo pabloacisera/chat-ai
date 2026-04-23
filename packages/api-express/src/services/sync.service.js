@@ -10,7 +10,23 @@ export async function migrateAnonData(userId, anonSessionId) {
   for (const conv of conversations) {
     const messages = await anonService.getConversationMessages(anonSessionId, conv.id);
 
-    const created = await prisma.conversation.create({
+    const existing = await prisma.conversation.findFirst({
+      where: {
+        userId,
+        title: conv.title,
+        createdAt: {
+          gte: new Date(new Date(conv.createdAt || Date.now()).getTime() - 5000),
+          lte: new Date(new Date(conv.createdAt || Date.now()).getTime() + 5000)
+        }
+      }
+    });
+    if (existing) {
+      results.migrated++;
+      results.messages += messages.length;
+      continue;
+    }
+
+    await prisma.conversation.create({
       data: {
         userId,
         title: conv.title,

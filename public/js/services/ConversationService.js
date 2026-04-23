@@ -65,31 +65,19 @@ export class ConversationService {
         return conversation;
     }
 
-    delete(id) {
-        const conv = this.getById(id);
-        
-        if (conv && conv.id) {
-            const convIdStr = String(conv.id);
-            const isAuthConv = convIdStr.includes('-') && !convIdStr.startsWith('anon');
-            const isAnonConv = convIdStr.startsWith('anon_') || /^\d+$/.test(convIdStr);
+    async delete(id) {
+        try {
+            await storageService.deleteConversation(id);
+            this.conversations = this.conversations.filter(c => String(c.id) !== String(id));
             
-            if (isAuthConv) {
-                storageService.deleteConversation(id).catch(console.error);
-            } else if (isAnonConv) {
-                const anonSessionId = localStorage.getItem('anonSessionId');
-                if (anonSessionId) {
-                    this.deleteAnonConversation(anonSessionId, convIdStr).catch(console.error);
-                }
+            // Si la conversación que borramos es la actual, limpiar currentId
+            if (String(this.currentId) === String(id)) {
+                this.setCurrent(null);
             }
+        } catch (error) {
+            console.error("Error al borrar conversación:", error);
+            throw error;
         }
-        
-        this.conversations = this.conversations.filter(c => String(c.id) !== String(id));
-    }
-
-    async deleteAnonConversation(sessionId, convId) {
-        const conversations = await storageService._fetch(`/anon/conversations/${sessionId}`);
-        const filtered = conversations.filter(c => String(c.id) !== String(convId));
-        await storageService._fetch(`/anon/conversations/${sessionId}`, 'PUT', { conversations: filtered });
     }
 
     addMessage(conversationId, message) {
@@ -122,9 +110,7 @@ export class ConversationService {
     }
 
     async updateAnonConversationTitle(sessionId, convId, title) {
-        const conversations = await storageService._fetch(`/anon/conversations/${sessionId}`);
-        const updated = conversations.map(c => c.id === convId ? { ...c, title } : c);
-        await storageService._fetch(`/anon/conversations/${sessionId}`, 'PUT', { conversations: updated });
+        await storageService._fetch(`/anon/conversations/${sessionId}/${convId}`, 'PUT', { title });
     }
 
     save() {

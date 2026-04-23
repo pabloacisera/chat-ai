@@ -1,4 +1,5 @@
 const API_BASE = '/api';
+import { ToastNotification } from '../components/ToastNotification.js';
 
 class StorageService {
   constructor() {
@@ -13,6 +14,7 @@ class StorageService {
   setAuthToken(token) {
     localStorage.setItem('authToken', token);
     this.isAuthenticated = true;
+    localStorage.removeItem('conversations:cache');
   }
 
   clearAuth() {
@@ -65,8 +67,18 @@ class StorageService {
   }
 
   async deleteConversation(conversationId) {
-    if (!this.isAuthenticated) return;
-    return this._fetch(`/conversations/${conversationId}`, 'DELETE');
+    let result;
+    if (this.isAuthenticated) {
+      result = await this._fetch(`/conversations/${conversationId}`, 'DELETE');
+    } else {
+      const sessionId = localStorage.getItem('anonSessionId');
+      if (!sessionId) return;
+      result = await this._fetch(`/anon/conversations/${sessionId}/${conversationId}`, 'DELETE');
+    }
+    
+    // Limpiar caché de conversaciones para forzar recarga en el próximo GET
+    localStorage.removeItem('conversations:cache');
+    return result;
   }
 
   async updateConversationTitle(conversationId, title) {
@@ -157,14 +169,35 @@ class StorageService {
       const res = await fetch(`${API_BASE}${url}`, options);
       if (!res.ok) {
         const error = await res.json().catch(() => ({ error: 'Error desconocido' }));
+        const errorMsg = error.error || `HTTP ${res.status}`;
         console.error(`[DEBUG] ❌ FETCH ERROR: ${res.status}`, error);
-        throw new Error(error.error || `HTTP ${res.status}`);
+        
+        if (res.status === 401) {
+          ToastNotification.warning("Tu sesión expiró. Volvé a iniciar sesión.");
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('user-info');
+          window.location.reload();
+          throw new Error(errorMsg);
+        }
+        
+        if (res.status === 400) {
+          ToastNotification.error(errorMsg);
+          throw new Error(errorMsg);
+        }
+        
+        throw new Error(errorMsg);
       }
       const data = await res.json();
       console.log(`[DEBUG] 📥 FETCH SUCCESS: ${url}`, data);
       return data;
     } catch (error) {
       console.error(`Error en ${method} ${url}:`, error);
+      if (!error.message?.includes('401') && !error.message?.includes('cancelled')) {
+        const networkErr = String(error).toLowerCase();
+        if (networkErr.includes('failed to fetch') || networkErr.includes('networkerror') || networkErr.includes('abort')) {
+          ToastNotification.error("Sin conexión. Verificá tu red e intentá de nuevo.");
+        }
+      }
       throw error;
     }
   }

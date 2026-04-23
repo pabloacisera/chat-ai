@@ -4,7 +4,7 @@ import * as memoryService from '../services/memory.service.js';
 
 export async function sendMessage(req, res, next) {
   try {
-    const { conversationId, content, modelId, maxTokens, temperature, systemPrompt, assistantMessage: providedAssistantMessage } = req.body;
+    const { conversationId, content, modelId, maxTokens, temperature, systemPrompt, assistantMessage: providedAssistantMessage, apiKey: providedApiKey } = req.body;
 
     if (!conversationId || !content) {
       return res.status(400).json({ error: 'conversationId y content son requeridos' });
@@ -14,7 +14,8 @@ export async function sendMessage(req, res, next) {
       req.userId,
       conversationId,
       content,
-      modelId
+      modelId,
+      providedApiKey
     );
 
     let fullResponse = providedAssistantMessage;

@@ -177,12 +177,12 @@ app.post("/api/llm/q", async (req, res) => {
       if (text) {
         fullResponse += text;
         tokenCount++;
-        const htmlChunk = simpleMarkdownToHTML(text);
-        res.write(`data: ${JSON.stringify({ chunk: htmlChunk })}\n\n`);
+        // Enviamos el texto plano durante el stream
+        res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
       }
     }
     
-    const processedAnswer = fullResponse;
+    const processedAnswer = simpleMarkdownToHTML(fullResponse);
     res.write(`data: ${JSON.stringify({ 
       done: true, 
       respuesta: processedAnswer,

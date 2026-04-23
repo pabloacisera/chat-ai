@@ -228,6 +228,7 @@ export class UserModal extends HTMLElement {
                     localStorage.removeItem('anonSessionId');
                 }
                 
+                localStorage.removeItem('currentConvId');
                 window.location.reload();
             } catch (error) {
                 if (errorMsg) errorMsg.textContent = error.message || 'Error al iniciar sesión';
@@ -265,6 +266,7 @@ export class UserModal extends HTMLElement {
                             localStorage.removeItem('anonSessionId');
                         }
                         
+                        localStorage.removeItem('currentConvId');
                         window.location.reload();
                     } catch (error) {
                         const errorMsg = this.shadowRoot.querySelector('#error-msg');

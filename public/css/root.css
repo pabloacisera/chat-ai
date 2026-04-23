@@ -47,7 +47,7 @@ html,body {
 /* === SIDEBAR === */
 .conversations {
     position: relative;
-    width: 260px;
+    width: 320px;
     min-width: 200px;
     max-width: 500px;
     display: flex;
@@ -260,6 +260,10 @@ html,body {
     color: var(--sidebar-text);
     font-size: 0.9rem;
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px; /* Limit width to prevent pushing buttons */
 }
 
 /* === SETTINGS BUTTON === */

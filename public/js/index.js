@@ -33,8 +33,7 @@ class ChatApp {
             return;
         }
 
-        const currentId = this.conversationService.getCurrentId();
-        this.sidebarRenderer = new SidebarRenderer(sidebarContainer, currentId);
+        this.sidebarRenderer = new SidebarRenderer(sidebarContainer, null);
         this.chatRenderer = new ChatRenderer(chatContainer);
 
         // 1. Cargar configuración y autenticación
@@ -43,7 +42,8 @@ class ChatApp {
         // 2. Renderizar sidebar con lo que tengamos
         this.sidebarRenderer.render(this.conversationService.getAll());
         
-        // 3. Cargar conversación actual si existe
+        // 3. Cargar conversación actual si existe (después de cargar conversaciones)
+        const currentId = this.conversationService.getCurrentId();
         console.log("📍 currentId al inicio:", currentId);
         
         if (currentId) {
@@ -76,7 +76,10 @@ class ChatApp {
                     storageService.getConversations()
                 ]);
                 
-                if (user) localStorage.setItem('user:cache', JSON.stringify(user));
+                if (user) {
+                    localStorage.setItem('user:cache', JSON.stringify(user));
+                    this.updateUserUI(user);
+                }
                 
                 if (config) {
                     localStorage.setItem('config:cache', JSON.stringify(config));
@@ -91,6 +94,12 @@ class ChatApp {
                 if (conversations) {
                     this.conversationService.setAll(conversations);
                     console.log(`✅ ${conversations.length} conversaciones cargadas para usuario autenticado`);
+                    
+                    const storedConvId = localStorage.getItem('currentConvId');
+                    if (storedConvId && !this.conversationService.getById(storedConvId)) {
+                        console.warn("⚠️ currentConvId no existe en las conversaciones del usuario, limpiando...");
+                        localStorage.removeItem('currentConvId');
+                    }
                 }
             } catch (error) {
                 console.error("❌ Error cargando datos de usuario:", error);
@@ -121,6 +130,12 @@ class ChatApp {
                     if (conversations) {
                         this.conversationService.setAll(conversations);
                         console.log(`✅ ${conversations.length} conversaciones cargadas desde Redis`);
+                        
+                        const storedConvId = localStorage.getItem('currentConvId');
+                        if (storedConvId && !this.conversationService.getById(storedConvId)) {
+                            console.warn("⚠️ currentConvId no existe en las conversaciones, limpiando...");
+                            localStorage.removeItem('currentConvId');
+                        }
                     }
                 } catch (error) {
                     console.error("❌ Error cargando desde Redis:", error);
@@ -128,7 +143,6 @@ class ChatApp {
             }
         }
     }
-
     applyTheme(theme) {
         const root = document.documentElement;
         if (theme === 'dark') {
@@ -136,11 +150,20 @@ class ChatApp {
         } else if (theme === 'light') {
             root.classList.remove('dark');
         } else {
-            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (prefersDark) {
                 root.classList.add('dark');
             } else {
                 root.classList.remove('dark');
             }
+        }
+    }
+
+    updateUserUI(user) {
+        const userNameEl = document.querySelector(".user-name");
+        if (userNameEl && user) {
+            userNameEl.textContent = user.name || user.email.split('@')[0];
+            userNameEl.title = user.email;
         }
     }
 
@@ -320,6 +343,13 @@ class ChatApp {
                     ToastNotification.error(`Has alcanzado el límite de ${max} conversaciones. Archiva o elimina algunas para crear una nueva.`);
                     return;
                 }
+            } else {
+                // Verificar si tenemos sesión anónima, si no, intentar crearla
+                let anonId = localStorage.getItem('anonSessionId');
+                if (!anonId || anonId === 'null') {
+                    console.log("⚠️ No hay sesión anónima, intentando crear una...");
+                    anonId = await storageService.createAnonSession();
+                }
             }
 
             const conversation = await this.conversationService.create(
@@ -347,6 +377,38 @@ class ChatApp {
         }
 
         await this.processMessage();
+    }
+
+    handleApiError(error, originalData = null) {
+        const errorStr = String(error).toLowerCase();
+        
+        if (errorStr.includes('503') || errorStr.includes('service unavailable') || errorStr.includes('high demand')) {
+            return { type: '503', message: 'El modelo está saturado, reintentando en 5 segundos...' };
+        }
+        
+        if (errorStr.includes('401') || errorStr.includes('unauthorized') || errorStr.includes('token')) {
+            return { type: '401', message: 'Tu sesión expiró. Volvé a iniciar sesión.' };
+        }
+        
+        if (errorStr.includes('400') || errorStr.includes('bad request') || errorStr.includes('invalid')) {
+            return { type: '400', message: error.message || 'Solicitud inválida' };
+        }
+        
+        if (errorStr.includes('abort') || errorStr.includes('cancelled') || errorStr.includes('cancel')) {
+            return { type: 'cancelled', message: 'Solicitud cancelada' };
+        }
+        
+        return { type: 'generic', message: error.message || String(error) };
+    }
+
+    handleNetworkError(error) {
+        const errorStr = String(error).toLowerCase();
+        
+        if (errorStr.includes('aborterror') || errorStr.includes('cancel') || errorStr.includes('fetch') || errorStr.includes('network') || errorStr.includes('failed to fetch') || errorStr.includes('networkerror')) {
+            return { type: 'network', message: 'Sin conexión. Verificá tu red e intentá de nuevo.' };
+        }
+        
+        return { type: 'network', message: error.message || String(error) };
     }
 
     async processMessage() {
@@ -459,162 +521,239 @@ class ChatApp {
             this.chatRenderer.updateSendButton("send");
             this.chatRenderer.hideTyping();
             
-            if (!error.message.includes('cancelled')) {
-                console.error("Error:", error);
+            if (error.name === 'AbortError') {
+                console.log("🛑 Solicitud cancelada por el usuario");
+            } else if (!error.message?.includes('503') && !error.message?.includes('cancelled')) {
+                console.error("Error en processMessage:", error);
             }
             
             this.currentRequest = null;
         }
     }
 
-async processStreamResponse(url, data, signal, targetElement = null) {
-        console.log("🚀 Iniciando processStreamResponse para:", url);
-        return new Promise((resolve, reject) => {
-            let fullResponse = "";
-            const streamSpeed = configService.getStreamSpeed();
-            let buffer = ""; 
-            
-            const writeNextChunk = (element, htmlChunk, delay) => {
-                return new Promise((res) => {
-                    let currentHtml = element.innerHTML;
-                    let index = 0;
-                    const write = () => {
-                        if (index < htmlChunk.length) {
-                            currentHtml += htmlChunk.charAt(index);
-                            element.innerHTML = currentHtml;
-                            const container = element.parentElement;
-                            if (container && container.classList.contains("messages-display")) {
-                                container.scrollTop = container.scrollHeight;
+async processStreamResponse(url, data, signal, targetElement = null, retryCount = 0) {
+        console.log("🚀 Iniciando processStreamResponse para:", url, "| Intento:", retryCount + 1);
+        
+        const streamSpeed = configService.getStreamSpeed();
+        let buffer = "";
+        let fullResponse = "";
+        let isResolved = false;
+        
+        const writeNextChunk = (element, htmlChunk, delay) => {
+            return new Promise((res) => {
+                let index = 0;
+                const write = () => {
+                    if (index < htmlChunk.length) {
+                        const char = htmlChunk.charAt(index);
+                        if (char === '<') {
+                            // Si detectamos el inicio de una etiqueta, buscamos el final para insertarla completa
+                            const closingBracket = htmlChunk.indexOf('>', index);
+                            if (closingBracket !== -1) {
+                                const tag = htmlChunk.substring(index, closingBracket + 1);
+                                element.insertAdjacentHTML('beforeend', tag);
+                                index = closingBracket + 1;
+                            } else {
+                                element.appendChild(document.createTextNode(char));
+                                index++;
                             }
-                            index++;
-                            setTimeout(write, delay);
                         } else {
-                            res();
+                            element.appendChild(document.createTextNode(char));
+                            index++;
                         }
-                    };
-                    write();
-                });
-            };
+
+                        const container = element.parentElement;
+                        if (container && container.classList.contains("messages-display")) {
+                            container.scrollTop = container.scrollHeight;
+                        }
+                        setTimeout(write, delay);
+                    } else {
+                        res();
+                    }
+                };
+                write();
+            });
+        };
+
+        const processLine = async (line) => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || !trimmedLine.startsWith('data: ')) return;
             
-            let isResolved = false;
-            
-            const handleStream = async () => {
-                try {
-                    console.log("📡 Realizando fetch...");
-                    const response = await fetch(url, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(data),
-                        signal: signal
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        console.error("❌ Error en respuesta HTTP:", response.status, errorData);
-                        if (!isResolved) {
-                            isResolved = true;
-                            reject(new Error(errorData.error || `HTTP ${response.status}`));
-                        }
-                        return;
-                    }
-
-                    const reader = response.body?.getReader();
-                    const decoder = new TextDecoder();
-
-                    if (!reader) {
-                        throw new Error("No se pudo obtener el reader del stream");
-                    }
-
-                    console.log("📖 Lector de stream preparado");
-
-                    const processLine = async (line) => {
-                        const trimmedLine = line.trim();
-                        if (!trimmedLine || !trimmedLine.startsWith('data: ')) return;
-                        
-                        try {
-                            const jsonStr = trimmedLine.slice(6);
-                            const data = JSON.parse(jsonStr);
-                            
-                            if (data.error) {
-                                console.error("❌ Error devuelto por la API:", data.error);
-                                if (!isResolved) {
-                                    isResolved = true;
-                                    reject(new Error(data.error));
-                                }
-                                return;
-                            }
-                            
-                            if (data.chunk) {
-                                fullResponse += data.chunk;
-                                
-                                if (targetElement !== false) {
-                                    let el = targetElement;
-                                    if (!el) {
-                                        const msgDisplay = this.chatRenderer.getMessagesDisplay();
-                                        el = msgDisplay?.querySelector('.ai-message:last-child');
-                                    }
-
-                                    if (el) {
-                                        await writeNextChunk(el, data.chunk, streamSpeed);
-                                    }
-                                }
-                            }
-                            
-                            if (data.done) {
-                                console.log("✅ Stream finalizado (data.done)");
-                                if (!isResolved) {
-                                    isResolved = true;
-                                    resolve({
-                                        respuesta: data.respuesta || fullResponse,
-                                        modelo: data.modelo,
-                                        tokens: data.tokens
-                                    });
-                                }
-                            }
-                        } catch (e) {
-                            console.warn("⚠️ Error parseando línea:", trimmedLine, e);
-                        }
-                    };
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        
-                        if (done) {
-                            console.log("📥 Reader finalizado (done: true)");
-                            if (buffer) await processLine(buffer);
-                            break;
-                        }
-                        
-                        const chunk = decoder.decode(value, { stream: true });
-                        buffer += chunk;
-                        
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop() || "";
-
-                        for (const line of lines) {
-                            await processLine(line);
-                        }
-                    }
-
+            try {
+                const jsonStr = trimmedLine.slice(6);
+                const lineData = JSON.parse(jsonStr);
+                
+                if (lineData.error) {
+                    console.error("❌ Error devuelto por la API (SSE):", lineData.error);
                     if (!isResolved) {
                         isResolved = true;
-                        resolve({ respuesta: fullResponse });
+                        throw lineData.error;
                     }
-                } catch (error) {
-                    if (error.name === 'AbortError') {
-                        console.log("🛑 Stream abortado por el usuario");
-                    } else {
-                        console.error("💥 Error en handleStream:", error);
-                        if (!isResolved) {
-                            isResolved = true;
-                            reject(error);
+                    return;
+                }
+                
+                if (lineData.chunk) {
+                    fullResponse += lineData.chunk;
+                    
+                    if (targetElement !== false) {
+                        let el = targetElement;
+                        if (!el) {
+                            const msgDisplay = this.chatRenderer.getMessagesDisplay();
+                            el = msgDisplay?.querySelector('.ai-message:last-child');
+                        }
+
+                        if (el) {
+                            await writeNextChunk(el, lineData.chunk, streamSpeed);
                         }
                     }
                 }
-            };
+                
+                if (lineData.done) {
+                    console.log("✅ Stream finalizado (data.done)");
+                    if (!isResolved) {
+                        isResolved = true;
+                        return {
+                            respuesta: lineData.respuesta || fullResponse,
+                            modelo: lineData.modelo,
+                            tokens: lineData.tokens
+                        };
+                    }
+                }
+            } catch (e) {
+                console.warn("⚠️ Error parseando línea:", trimmedLine, e);
+            }
+        };
 
-            handleStream();
-        });
+        try {
+            console.log("📡 Realizando fetch...");
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+                signal: signal
+            });
+
+            if (!response.ok) {
+                const status = response.status;
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.error || `HTTP ${status}`;
+                console.error("❌ Error en respuesta HTTP:", status, errorData);
+                
+                if (status === 503 || errorMessage.toLowerCase().includes('503') || errorMessage.toLowerCase().includes('service unavailable') || errorMessage.toLowerCase().includes('high demand')) {
+                    if (retryCount < 2) {
+                        console.log(`🔄 Reintento ${retryCount + 1} de 2 para 503...`);
+                        ToastNotification.warning("El modelo está saturado, reintentando en 5 segundos...");
+                        await new Promise(r => setTimeout(r, 5000));
+                        return this.processStreamResponse(url, data, signal, targetElement, retryCount + 1);
+                    } else {
+                        ToastNotification.error("El modelo no está disponible. Probá cambiando de modelo en Configuración.");
+                        throw new Error(errorMessage);
+                    }
+                }
+                
+                if (status === 401) {
+                    ToastNotification.warning("Tu sesión expiró. Volvé a iniciar sesión.");
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('user-info');
+                    window.location.reload();
+                    throw new Error(errorMessage);
+                }
+                
+                if (status === 400) {
+                    ToastNotification.error(errorMessage);
+                    throw new Error(errorMessage);
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+
+            if (!reader) {
+                throw new Error("No se pudo obtener el reader del stream");
+            }
+
+            console.log("📖 Lector de stream preparado");
+
+            let streamResult = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) {
+                    if (buffer) {
+                        const r = await processLine(buffer);
+                        if (r) streamResult = r;
+                    }
+                    break;
+                }
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                    const result = await processLine(line);
+                    if (result) {
+                        streamResult = result;
+                        if (isResolved) break;
+                    }
+                }
+
+                if (streamResult && isResolved) break;
+            }
+
+            return streamResult || { respuesta: fullResponse };
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log("🛑 Stream abortado por el usuario");
+                throw error;
+            }
+            
+            const networkError = this.handleNetworkError(error);
+            if (networkError.type === 'network') {
+                ToastNotification.error(networkError.message);
+                console.error("💥 Error de red:", error);
+                throw error;
+            }
+            
+            const apiError = this.handleApiError(error, data);
+            if (apiError.type === '503') {
+                if (retryCount < 2) {
+                    console.log(`🔄 Reintento ${retryCount + 1} de 2 para 503...`);
+                    ToastNotification.warning("El modelo está saturado, reintentando en 5 segundos...");
+                    await new Promise(r => setTimeout(r, 5000));
+                    return this.processStreamResponse(url, data, signal, targetElement, retryCount + 1);
+                } else {
+                    ToastNotification.error("El modelo no está disponible. Probá cambiando de modelo en Configuración.");
+                    console.error("💥 Error 503 después de reintentos:", error);
+                    throw error;
+                }
+            }
+            
+            if (apiError.type === '401') {
+                ToastNotification.warning(apiError.message);
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user-info');
+                window.location.reload();
+                throw error;
+            }
+            
+            if (apiError.type === '400') {
+                ToastNotification.error(apiError.message);
+                console.error("💥 Error 400:", error);
+                throw error;
+            }
+            
+            if (apiError.type === 'generic') {
+                console.error("💥 Error genérico del stream:", error);
+                throw error;
+            }
+            
+            console.error("💥 Error en handleStream:", error);
+            throw error;
+        }
     }
 
     stripHTML(html) {
@@ -780,16 +919,23 @@ async processStreamResponse(url, data, signal, targetElement = null) {
         const modal = document.createElement("delete-modal");
         document.body.appendChild(modal);
         
-        modal.addEventListener("confirm-delete", () => {
-            this.conversationService.delete(id);
-            this.sidebarRenderer.render(this.conversationService.getAll());
-            
-            if (isCurrent) {
-                this.chatRenderer.clear();
-                this.conversationService.setCurrent(null);
+        modal.addEventListener("confirm-delete", async () => {
+            try {
+                await this.conversationService.delete(id);
+                this.sidebarRenderer.render(this.conversationService.getAll());
+
+                if (isCurrent) {
+                    this.chatRenderer.clear();
+                    this.conversationService.setCurrent(null);
+                    localStorage.removeItem('currentConvId');
+                }
+
+                ToastNotification.success("Conversación eliminada");
+            } catch (error) {
+                console.error("Error al borrar:", error);
+                ToastNotification.error("No se pudo eliminar la conversación");
             }
-        });
-    }
+        });    }
 
     handleSettings() {
         const modalConfig = document.createElement("config-modal");

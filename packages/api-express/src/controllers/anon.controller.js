@@ -12,6 +12,9 @@ export async function createSession(req, res, next) {
 export async function getConversations(req, res, next) {
   try {
     const { sessionId } = req.params;
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
     const conversations = await anonService.getConversations(sessionId);
     res.json(conversations);
   } catch (error) {
@@ -23,6 +26,10 @@ export async function createConversation(req, res, next) {
   try {
     const { sessionId } = req.params;
     const { title, modelId, provider } = req.body;
+
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
 
     const conversations = await anonService.getConversations(sessionId);
     
@@ -69,6 +76,9 @@ export async function syncConversations(req, res, next) {
 export async function getMessages(req, res, next) {
   try {
     const { sessionId, convId } = req.params;
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
     const messages = await anonService.getConversationMessages(sessionId, convId);
     res.json(messages);
   } catch (error) {
@@ -80,6 +90,10 @@ export async function sendMessage(req, res, next) {
   try {
     const { sessionId, convId } = req.body;
     const { content, modelId, provider, apiKey, maxTokens, temperature, systemPrompt, assistantMessage: providedAssistantMessage } = req.body;
+
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
 
     if (!content) {
       return res.status(400).json({ error: 'content es requerido' });
@@ -134,6 +148,9 @@ export async function sendMessage(req, res, next) {
 export async function updateConfig(req, res, next) {
   try {
     const { sessionId } = req.params;
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
     await anonService.updateSessionConfig(sessionId, req.body);
     res.json({ message: 'Configuración actualizada' });
   } catch (error) {
@@ -144,6 +161,9 @@ export async function updateConfig(req, res, next) {
 export async function getWelcomeShown(req, res, next) {
   try {
     const { sessionId } = req.params;
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
     const meta = await anonService.getSessionMeta(sessionId);
     res.json({ welcomeShown: meta?.welcomeShown === 'true' });
   } catch (error) {
@@ -154,8 +174,45 @@ export async function getWelcomeShown(req, res, next) {
 export async function setWelcomeShown(req, res, next) {
   try {
     const { sessionId } = req.params;
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
     await anonService.setWelcomeShown(sessionId);
     res.json({ message: 'Welcome shown actualizado' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateConversation(req, res, next) {
+  try {
+    const { sessionId, convId } = req.params;
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
+    const { title } = req.body;
+    const conversations = await anonService.getConversations(sessionId);
+    const updated = conversations.map(c =>
+      String(c.id) === String(convId) ? { ...c, title: title ?? c.title, updatedAt: new Date().toISOString() } : c
+    );
+    await anonService.saveConversations(sessionId, updated);
+    res.json(updated.find(c => String(c.id) === String(convId)) || { message: 'Actualizado' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteConversation(req, res, next) {
+  try {
+    const { sessionId, convId } = req.params;
+    if (!sessionId || sessionId === 'null') {
+      return res.status(400).json({ error: 'Session ID inválido' });
+    }
+    const conversations = await anonService.getConversations(sessionId);
+    const filtered = conversations.filter(c => String(c.id) !== String(convId));
+    await anonService.saveConversations(sessionId, filtered);
+    await anonService.deleteConversationMessages(sessionId, convId);
+    res.json({ message: 'Conversación eliminada' });
   } catch (error) {
     next(error);
   }

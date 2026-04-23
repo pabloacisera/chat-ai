@@ -95,6 +95,7 @@ services:
       - EXPRESS_PORT=3001
       - TS_NODE_TRANSPILE_ONLY=true # Esto ayuda mucho a la CPU
       - DATABASE_URL=postgresql://${POSTGRES_USER:-chatuser}:${POSTGRES_PASSWORD:-chatpass123}@postgres:5432/${POSTGRES_DB:-chatdb}
+      - REDIS_URL=redis://redis:6379
     networks:
       - internal
     depends_on:

@@ -64,6 +64,10 @@ export async function deleteSession(sessionId) {
   }
 }
 
+export async function deleteConversationMessages(sessionId, convId) {
+  await redisClient.del(`anon:${sessionId}:conv:${convId}`);
+}
+
 export async function setWelcomeShown(sessionId) {
   await redisClient.hset(`anon:${sessionId}:meta`, 'welcomeShown', 'true');
 }
