@@ -1,10 +1,9 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/db.js';
+import { JWT_SECRET } from '../config/secrets.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key_32_chars_minimum';
-
-export async function register(email, password, name) {
+export async function register(email: string, password: string, name?: string) {
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
     throw new Error('El email ya está registrado');
@@ -18,25 +17,25 @@ export async function register(email, password, name) {
       passwordHash,
       name,
       config: {
-        create: {}
-      }
+        create: {},
+      },
     },
     include: {
-      config: true
-    }
+      config: true,
+    },
   });
 
   return {
     id: user.id,
     email: user.email,
     name: user.name,
-    createdAt: user.createdAt
+    createdAt: user.createdAt,
   };
 }
 
-export async function login(email, password) {
+export async function login(email: string, password: string) {
   const user = await prisma.user.findUnique({ where: { email } });
-  
+
   if (!user || user.isDeleted) {
     throw new Error('Credenciales inválidas');
   }
@@ -46,11 +45,7 @@ export async function login(email, password) {
     throw new Error('Credenciales inválidas');
   }
 
-  const token = jwt.sign(
-    { userId: user.id, email: user.email },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+  const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -58,8 +53,8 @@ export async function login(email, password) {
     data: {
       userId: user.id,
       token,
-      expiresAt
-    }
+      expiresAt,
+    },
   });
 
   return {
@@ -68,19 +63,19 @@ export async function login(email, password) {
       id: user.id,
       email: user.email,
       name: user.name,
-      createdAt: user.createdAt
-    }
+      createdAt: user.createdAt,
+    },
   };
 }
 
-export async function verifyToken(token) {
+export async function verifyToken(token: string) {
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
     const session = await prisma.session.findFirst({
       where: {
         token,
-        expiresAt: { gt: new Date() }
-      }
+        expiresAt: { gt: new Date() },
+      },
     });
 
     if (!session) {
@@ -89,7 +84,7 @@ export async function verifyToken(token) {
 
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, email: true, isDeleted: true }
+      select: { id: true, email: true, isDeleted: true },
     });
 
     if (!user || user.isDeleted) {
@@ -97,23 +92,24 @@ export async function verifyToken(token) {
     }
 
     return { userId: payload.userId, email: payload.email };
-  } catch (error) {
-    throw new Error(error.message || 'Token inválido');
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Token inválido';
+    throw new Error(message);
   }
 }
 
-export async function logout(token) {
+export async function logout(token: string) {
   await prisma.session.deleteMany({ where: { token } });
 }
 
-export async function getUserById(userId) {
+export async function getUserById(userId: string) {
   return prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
       email: true,
       createdAt: true,
-      updatedAt: true
-    }
+      updatedAt: true,
+    },
   });
 }

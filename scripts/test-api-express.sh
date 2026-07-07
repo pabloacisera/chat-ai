@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test script for API endpoints
-# Run from project root: bash packages/api-express/test-api.sh
+# Run from project root: bash scripts/test-api-express.sh
 
 API_URL="http://localhost/api"
 

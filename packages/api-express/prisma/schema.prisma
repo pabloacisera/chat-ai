@@ -56,9 +56,10 @@ model UserConfig {
   theme         String   @default("system")
   activeModelId String?
   language      String   @default("es")
-  streamSpeed   Int      @default(8)
-  showTitle     Boolean  @default(true)
-  updatedAt     DateTime @updatedAt
+  streamSpeed     Int      @default(8)
+  showTitle       Boolean  @default(true)
+  autoDeleteDays  Int?
+  updatedAt       DateTime @updatedAt
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 

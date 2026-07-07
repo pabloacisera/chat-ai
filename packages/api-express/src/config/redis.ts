@@ -1,10 +1,14 @@
-import Redis from 'ioredis';
+import Redis, { RedisOptions } from 'ioredis';
 
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+
+const redisOptions: RedisOptions = {
+  retryStrategy: (times: number) => Math.min(times * 100, 3000),
   maxRetriesPerRequest: 3,
-  retryDelayOnFailover: 100,
   lazyConnect: true,
-});
+};
+
+const redisClient = new Redis(REDIS_URL, redisOptions);
 
 redisClient.on('connect', () => {
   console.log('✅ Conectado a Redis');

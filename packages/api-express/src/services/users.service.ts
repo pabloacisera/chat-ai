@@ -1,52 +1,57 @@
 import prisma from '../config/db.js';
 import { encrypt, decrypt } from './encryption.service.js';
 
-export async function getUserConfig(userId) {
+const DEFAULT_CONFIG = {
+  theme: 'system',
+  activeModelId: null,
+  language: 'es',
+  streamSpeed: 8,
+  showTitle: true,
+  autoDeleteDays: null,
+};
+
+export async function getUserConfig(userId: string) {
   const config = await prisma.userConfig.findUnique({
-    where: { userId }
+    where: { userId },
   });
 
   if (!config) {
-    return {
-      theme: 'system',
-      activeModelId: null,
-      language: 'es',
-      streamSpeed: 8,
-      showTitle: true
-    };
+    return { ...DEFAULT_CONFIG };
   }
 
   return config;
 }
 
-export async function updateUserConfig(userId, data) {
-  const { theme, activeModelId, language, streamSpeed, showTitle } = data;
+export async function updateUserConfig(userId: string, data: Record<string, unknown>) {
+  const { theme, activeModelId, language, streamSpeed, showTitle, autoDeleteDays } = data;
 
   return prisma.userConfig.upsert({
     where: { userId },
     create: {
       userId,
-      theme: theme || 'system',
+      theme: theme || DEFAULT_CONFIG.theme,
       activeModelId,
-      language: language || 'es',
+      language: language || DEFAULT_CONFIG.language,
       streamSpeed,
-      showTitle
+      showTitle,
+      autoDeleteDays,
     },
     update: {
       ...(theme && { theme }),
       ...(activeModelId !== undefined && { activeModelId }),
       ...(language && { language }),
       ...(streamSpeed !== undefined && { streamSpeed }),
-      ...(showTitle !== undefined && { showTitle })
-    }
+      ...(showTitle !== undefined && { showTitle }),
+      ...(autoDeleteDays !== undefined && { autoDeleteDays }),
+    },
   });
 }
 
-export async function getUserModels(userId) {
+export async function getUserModels(userId: string) {
   return prisma.modelConfig.findMany({
     where: {
       userId,
-      isActive: true
+      isActive: true,
     },
     select: {
       id: true,
@@ -56,26 +61,26 @@ export async function getUserModels(userId) {
       temperature: true,
       systemPrompt: true,
       isActive: true,
-      createdAt: true
-    }
+      createdAt: true,
+    },
   });
 }
 
-export async function addUserModel(userId, modelData) {
+export async function addUserModel(userId: string, modelData: Record<string, unknown>) {
   const { modelId, provider, apiKey, maxTokens, temperature, systemPrompt } = modelData;
 
   if (!apiKey) {
     throw new Error('API Key es requerida');
   }
 
-  const apiKeyEnc = encrypt(apiKey);
+  const apiKeyEnc = encrypt(apiKey) ?? '';
 
   return prisma.modelConfig.upsert({
     where: {
       userId_modelId: {
         userId,
-        modelId
-      }
+        modelId,
+      },
     },
     create: {
       userId,
@@ -85,7 +90,7 @@ export async function addUserModel(userId, modelData) {
       maxTokens,
       temperature,
       systemPrompt,
-      isActive: true
+      isActive: true,
     },
     update: {
       provider,
@@ -93,54 +98,61 @@ export async function addUserModel(userId, modelData) {
       maxTokens,
       temperature,
       systemPrompt,
-      isActive: true
-    }
+      isActive: true,
+    },
   });
 }
 
-export async function updateUserModel(userId, modelId, data) {
+interface UpdateModelData {
+  maxTokens?: number;
+  temperature?: number;
+  systemPrompt?: string;
+  apiKey?: string;
+}
+
+export async function updateUserModel(userId: string, modelId: string, data: UpdateModelData) {
   const { maxTokens, temperature, systemPrompt, apiKey } = data;
 
-  const updateData = {};
-  
+  const updateData: Record<string, unknown> = {};
+
   if (maxTokens !== undefined) updateData.maxTokens = maxTokens;
   if (temperature !== undefined) updateData.temperature = temperature;
   if (systemPrompt !== undefined) updateData.systemPrompt = systemPrompt;
   if (apiKey) {
-    updateData.apiKeyEnc = encrypt(apiKey);
+    updateData.apiKeyEnc = encrypt(apiKey) ?? '';
   }
 
   return prisma.modelConfig.update({
     where: {
       userId_modelId: {
         userId,
-        modelId
-      }
+        modelId,
+      },
     },
-    data: updateData
+    data: updateData,
   });
 }
 
-export async function deleteUserModel(userId, modelId) {
+export async function deleteUserModel(userId: string, modelId: string) {
   return prisma.modelConfig.update({
     where: {
       userId_modelId: {
         userId,
-        modelId
-      }
+        modelId,
+      },
     },
-    data: { isActive: false }
+    data: { isActive: false },
   });
 }
 
-export async function getModelApiKey(userId, modelId) {
+export async function getModelApiKey(userId: string, modelId: string) {
   const model = await prisma.modelConfig.findUnique({
     where: {
       userId_modelId: {
         userId,
-        modelId
-      }
-    }
+        modelId,
+      },
+    },
   });
 
   if (!model || !model.isActive) {

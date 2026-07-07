@@ -43,6 +43,34 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* --- BUSCADOR --- */
+.search-section {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--sidebar-text);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.search-input::placeholder {
+    color: var(--sidebar-text-muted);
+}
+
+.search-input:focus {
+    border-color: var(--sidebar-active-border);
+    background: rgba(255, 255, 255, 0.12);
+}
+
 /* --- CONTENEDOR ASIDE --- */
 .conversations {
     position: relative;

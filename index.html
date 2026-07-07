@@ -5,18 +5,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <title>Chat IA</title>
-    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
+    <title>ChatForge</title>
+    <meta name="description" content="ChatForge — Asistente de IA conversacional">
+    <meta property="og:title" content="ChatForge">
+    <meta property="og:description" content="Asistente de IA conversacional">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="icon" href="public/img/favicon.png" type="image/png" sizes="512x512">
+    <link rel="apple-touch-icon" href="public/img/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="public/css/root.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
+    <button class="hamburger-btn" id="hamburger-btn" aria-label="Abrir menú lateral">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        </svg>
+    </button>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
     <main id="dashboard">
-        <aside class="conversations">
+        <aside class="conversations" id="sidebar">
             <section class="buttons-section">
                 <button type="button" class="new-conversation" id="new-conversation" title="Nueva conversación">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
@@ -24,7 +36,19 @@
                     </svg>
                     Nueva
                 </button>
+                <button type="button" id="btn-theme-toggle" class="btn-theme-toggle" title="Cambiar tema">
+                    <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <circle cx="12" cy="12" r="5"/>
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" fill="none"/>
+                    </svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:none">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
             </section>
+            <div class="search-section">
+                <input type="text" id="search-conversations" placeholder="Buscar conversaciones..." class="search-input">
+            </div>
             <ul class="list-conversations">
             </ul>
             <section class="user-section">
@@ -45,7 +69,8 @@
         <section class="messages-content" id="messages-container"></section>
     </main>
 
-    <script src="public/js/reziseAside.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="public/js/resizeAside.js" defer></script>
     <script type="module" src="public/js/index.js"></script>
 </body>
 

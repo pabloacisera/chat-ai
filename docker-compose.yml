@@ -17,7 +17,6 @@ services:
       - ./index.html:/usr/share/nginx/html/index.html:ro
       - ./public:/usr/share/nginx/html/public:ro
     depends_on:
-      - n8n
       - api-express
     networks:
       - internal
@@ -55,28 +54,6 @@ services:
     networks:
       - internal
 
-  n8n:
-    image: n8nio/n8n:1.68.0
-    container_name: n8n-container
-    restart: always
-    deploy:
-      resources:
-        limits:
-          cpus: '0.75'     # n8n es pesado al ejecutar workflows
-          memory: 1G      # n8n basado en Node necesita aire
-    ports:
-      - "5678:5678"
-    environment:
-      - N8N_HOST=${N8N_HOST:-localhost}
-      - N8N_PORT=${N8N_PORT:-5678}
-      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      - GENERIC_TIMEZONE=${TIMEZONE:-America/Argentina/Buenos_Aires}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-secret_key_for_testing_with_32chars}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    networks:
-      - internal
-
   api-express:
     build: ./packages/api-express
     container_name: api-express
@@ -87,27 +64,29 @@ services:
           cpus: '0.50'
           memory: 512M
     volumes:
-      - ./packages/api-express:/app
-      - /app/node_modules
       - ./.env:/app/.env:ro
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - EXPRESS_PORT=3001
-      - TS_NODE_TRANSPILE_ONLY=true # Esto ayuda mucho a la CPU
       - DATABASE_URL=postgresql://${POSTGRES_USER:-chatuser}:${POSTGRES_PASSWORD:-chatpass123}@postgres:5432/${POSTGRES_DB:-chatdb}
       - REDIS_URL=redis://redis:6379
     networks:
       - internal
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     depends_on:
-      - n8n
-      - postgres
-      - redis
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
 
 networks:
   internal:
     driver: bridge
 
 volumes:
-  n8n_data:
   postgres_data:
   redis_data:

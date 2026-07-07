@@ -1,10 +1,11 @@
+import { Request, Response, NextFunction } from 'express';
 import * as authService from '../services/auth.service.js';
 import { googleAuth } from '../services/google-auth.service.js';
 
-export async function register(req, res, next) {
+export async function register(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password, name } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({ error: 'Email y contraseña son requeridos' });
     }
@@ -20,10 +21,10 @@ export async function register(req, res, next) {
   }
 }
 
-export async function login(req, res, next) {
+export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({ error: 'Email y contraseña son requeridos' });
     }
@@ -35,7 +36,7 @@ export async function login(req, res, next) {
   }
 }
 
-export async function logout(req, res, next) {
+export async function logout(req: Request, res: Response, next: NextFunction) {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (token) {
@@ -47,7 +48,7 @@ export async function logout(req, res, next) {
   }
 }
 
-export async function me(req, res, next) {
+export async function me(req: Request, res: Response, next: NextFunction) {
   try {
     const user = await authService.getUserById(req.userId);
     if (!user) {
@@ -59,10 +60,10 @@ export async function me(req, res, next) {
   }
 }
 
-export async function googleLogin(req, res, next) {
+export async function googleLogin(req: Request, res: Response, next: NextFunction) {
   try {
     const { token: googleToken } = req.body;
-    
+
     if (!googleToken) {
       return res.status(400).json({ error: 'Token de Google requerido' });
     }

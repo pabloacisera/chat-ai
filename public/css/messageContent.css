@@ -68,17 +68,54 @@
     color: #757575;
 }
 
-/* --- TÍTULO DEL CHAT --- */
+/* --- HEADER DEL CHAT --- */
+.chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #fafafa;
+    flex-shrink: 0;
+    position: relative;
+}
+
 .chat-title {
     font-size: 1rem;
     font-weight: 600;
     color: var(--primary-color);
-    padding: 16px 24px;
-    border-bottom: 1px solid #e0e0e0;
     margin: 0;
     text-align: center;
-    background-color: #fafafa;
-    flex-shrink: 0;
+}
+
+.btn-export {
+    position: absolute;
+    right: 12px;
+    background: rgba(0,0,0,0.04);
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 6px;
+    padding: 7px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    opacity: 0.8;
+    color: #5f6368;
+}
+
+.btn-export:hover {
+    opacity: 1;
+    color: #EAC452;
+    background: rgba(234, 196, 82, 0.12);
+    border-color: #EAC452;
+}
+
+.btn-export svg {
+    fill: currentColor;
+    width: 20px;
+    height: 20px;
 }
 
 /* --- MENSAJES --- */

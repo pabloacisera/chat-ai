@@ -1,6 +1,7 @@
+import { Request, Response, NextFunction } from 'express';
 import * as anonService from '../services/anon.service.js';
 
-export async function createSession(req, res, next) {
+export async function createSession(req: Request, res: Response, next: NextFunction) {
   try {
     const sessionId = await anonService.createSession();
     res.json({ sessionId });
@@ -9,7 +10,7 @@ export async function createSession(req, res, next) {
   }
 }
 
-export async function getConversations(req, res, next) {
+export async function getConversations(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId } = req.params;
     if (!sessionId || sessionId === 'null') {
@@ -22,7 +23,7 @@ export async function getConversations(req, res, next) {
   }
 }
 
-export async function createConversation(req, res, next) {
+export async function createConversation(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId } = req.params;
     const { title, modelId, provider } = req.body;
@@ -32,14 +33,14 @@ export async function createConversation(req, res, next) {
     }
 
     const conversations = await anonService.getConversations(sessionId);
-    
+
     const newConversation = {
       id: `anon_${Date.now()}`,
       title: title || 'Nueva conversación',
       modelId,
       provider,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
 
     conversations.unshift(newConversation);
@@ -52,7 +53,7 @@ export async function createConversation(req, res, next) {
   }
 }
 
-export async function syncConversations(req, res, next) {
+export async function syncConversations(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId } = req.params;
     const { conversations, messages } = req.body;
@@ -73,7 +74,7 @@ export async function syncConversations(req, res, next) {
   }
 }
 
-export async function getMessages(req, res, next) {
+export async function getMessages(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId, convId } = req.params;
     if (!sessionId || sessionId === 'null') {
@@ -86,10 +87,18 @@ export async function getMessages(req, res, next) {
   }
 }
 
-export async function sendMessage(req, res, next) {
+export async function sendMessage(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId, convId } = req.body;
-    const { content, modelId, provider, apiKey, maxTokens, temperature, systemPrompt, assistantMessage: providedAssistantMessage } = req.body;
+    const {
+      content,
+      modelId,
+      apiKey,
+      maxTokens,
+      temperature,
+      systemPrompt,
+      assistantMessage: providedAssistantMessage,
+    } = req.body;
 
     if (!sessionId || sessionId === 'null') {
       return res.status(400).json({ error: 'Session ID inválido' });
@@ -100,12 +109,12 @@ export async function sendMessage(req, res, next) {
     }
 
     const messages = await anonService.getConversationMessages(sessionId, convId);
-    
+
     const userMessage = {
       id: `msg_${Date.now()}_user`,
       role: 'user',
       content,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
     messages.push(userMessage);
 
@@ -115,25 +124,31 @@ export async function sendMessage(req, res, next) {
     let history = [];
 
     if (messages.length <= UMBRAL) {
-      history = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }));
+      history = messages.slice(0, -1).map((m) => ({ role: m.role, content: m.content }));
     } else {
-      history = messages.slice(-7, -1).map(m => ({ role: m.role, content: m.content }));
+      history = messages.slice(-7, -1).map((m) => ({ role: m.role, content: m.content }));
     }
 
     if (!fullResponse) {
       const { callAI } = await import('../services/ai.service.js');
-      fullResponse = await callAI(content, modelId, apiKey, {
-        maxTokens: maxTokens || 4096,
-        temperature: temperature ?? 0.7,
-        systemPrompt
-      }, history);
+      fullResponse = await callAI(
+        content,
+        modelId,
+        apiKey,
+        {
+          maxTokens: maxTokens || 4096,
+          temperature: temperature ?? 0.7,
+          systemPrompt,
+        },
+        history,
+      );
     }
 
     const assistantMessage = {
       id: `msg_${Date.now()}_assistant`,
       role: 'assistant',
       content: fullResponse,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
     messages.push(assistantMessage);
 
@@ -145,7 +160,7 @@ export async function sendMessage(req, res, next) {
   }
 }
 
-export async function updateConfig(req, res, next) {
+export async function updateConfig(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId } = req.params;
     if (!sessionId || sessionId === 'null') {
@@ -158,7 +173,7 @@ export async function updateConfig(req, res, next) {
   }
 }
 
-export async function getWelcomeShown(req, res, next) {
+export async function getWelcomeShown(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId } = req.params;
     if (!sessionId || sessionId === 'null') {
@@ -171,7 +186,7 @@ export async function getWelcomeShown(req, res, next) {
   }
 }
 
-export async function setWelcomeShown(req, res, next) {
+export async function setWelcomeShown(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId } = req.params;
     if (!sessionId || sessionId === 'null') {
@@ -184,7 +199,7 @@ export async function setWelcomeShown(req, res, next) {
   }
 }
 
-export async function updateConversation(req, res, next) {
+export async function updateConversation(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId, convId } = req.params;
     if (!sessionId || sessionId === 'null') {
@@ -192,24 +207,24 @@ export async function updateConversation(req, res, next) {
     }
     const { title } = req.body;
     const conversations = await anonService.getConversations(sessionId);
-    const updated = conversations.map(c =>
-      String(c.id) === String(convId) ? { ...c, title: title ?? c.title, updatedAt: new Date().toISOString() } : c
+    const updated = conversations.map((c) =>
+      String(c.id) === String(convId) ? { ...c, title: title ?? c.title, updatedAt: new Date().toISOString() } : c,
     );
     await anonService.saveConversations(sessionId, updated);
-    res.json(updated.find(c => String(c.id) === String(convId)) || { message: 'Actualizado' });
+    res.json(updated.find((c) => String(c.id) === String(convId)) || { message: 'Actualizado' });
   } catch (error) {
     next(error);
   }
 }
 
-export async function deleteConversation(req, res, next) {
+export async function deleteConversation(req: Request, res: Response, next: NextFunction) {
   try {
     const { sessionId, convId } = req.params;
     if (!sessionId || sessionId === 'null') {
       return res.status(400).json({ error: 'Session ID inválido' });
     }
     const conversations = await anonService.getConversations(sessionId);
-    const filtered = conversations.filter(c => String(c.id) !== String(convId));
+    const filtered = conversations.filter((c) => String(c.id) !== String(convId));
     await anonService.saveConversations(sessionId, filtered);
     await anonService.deleteConversationMessages(sessionId, convId);
     res.json({ message: 'Conversación eliminada' });

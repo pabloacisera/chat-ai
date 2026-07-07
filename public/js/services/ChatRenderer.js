@@ -1,7 +1,6 @@
 export class ChatRenderer {
     constructor(container) {
         this.container = container;
-        console.log("[DEBUG] ChatRenderer instanciado");
     }
 
     clear() {
@@ -11,8 +10,6 @@ export class ChatRenderer {
     }
 
     render(conversation, preserveScroll = false, hasActiveConversation = false) {
-        console.log(`[DEBUG] 🖼️ Renderizando conversación:`, conversation?.id, { hasActiveConversation });
-        
         if (!this.container) return;
         this.clear();
 
@@ -35,27 +32,56 @@ export class ChatRenderer {
         chatWindow.style.flexDirection = "column";
         chatWindow.style.height = "100%";
 
-        // 1. Título
+        const headerChat = document.createElement("div");
+        headerChat.classList.add("chat-header");
         const titleChat = document.createElement("p");
         titleChat.classList.add("chat-title");
         titleChat.textContent = (conversation?.title || "Nueva conversación").replace(/<[^>]+>/g, '');
+        const exportBtn = document.createElement("button");
+        exportBtn.classList.add("btn-export");
+        exportBtn.title = "Exportar conversación";
+        exportBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20"><path d="M480-320 280-520l56-58 104 104v-326h80v326l104-104 56 58-200 200ZM240-160q-33 0-56.5-23.5T160-240v-120h80v120h480v-120h80v120q0 33-23.5 56.5T720-160H240Z"/></svg>`;
+        exportBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const event = new CustomEvent("export-conversation", {
+                detail: { conversation },
+                bubbles: true
+            });
+            exportBtn.dispatchEvent(event);
+        });
+        headerChat.appendChild(titleChat);
+        headerChat.appendChild(exportBtn);
 
-        // 2. Pantalla de mensajes
         const messagesDisplay = document.createElement("div");
         messagesDisplay.classList.add("messages-display");
 
         const messages = conversation?.messages || [];
 
         if (messages.length === 0) {
-            messagesDisplay.innerHTML = `
-                <div class="empty-state">
-                    <h2>¡Hola! Soy tu asistente IA</h2>
-                    <p>¿En qué puedo ayudarte hoy?</p>
+            const emptyState = document.createElement("div");
+            emptyState.classList.add("empty-state");
+            emptyState.innerHTML = `
+                <h2>¡Hola! Soy tu asistente IA</h2>
+                <p>¿En qué puedo ayudarte hoy?</p>
+                <div class="suggestion-chips">
+                    <button class="chip" data-prompt="Explícame qué puedes hacer">¿Qué puedes hacer?</button>
+                    <button class="chip" data-prompt="Escribe un poema corto">Escribe un poema</button>
+                    <button class="chip" data-prompt="Ayúdame con JavaScript">Ayúdame con código</button>
+                    <button class="chip" data-prompt="Dame ideas creativas para un proyecto">Ideas creativas</button>
                 </div>
             `;
+            emptyState.querySelectorAll('.chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const input = document.getElementById("send-message-input");
+                    if (input) {
+                        input.value = chip.dataset.prompt;
+                        input.focus();
+                    }
+                });
+            });
+            messagesDisplay.appendChild(emptyState);
         } else {
             messages.forEach((msj) => {
-                // SOPORTE POLIMÓRFICO PARA PROPIEDADES (role/content o question/response)
                 const isUser = msj.role === 'user' || !!msj.question;
                 const isBot = msj.role === 'assistant' || msj.role === 'ai' || !!msj.response || !!msj.text;
                 const text = msj.content || msj.question || msj.response || msj.text;
@@ -66,25 +92,30 @@ export class ChatRenderer {
                     divUser.textContent = text;
                     messagesDisplay.appendChild(divUser);
                 }
-                
+
                 if (isBot && text) {
                     const divBot = document.createElement("div");
                     divBot.classList.add("text-msj", "ai-message");
-                    
+
+                    const content = document.createElement("div");
+                    content.classList.add("message-content");
                     if (text.includes('<') || text.includes('\n')) {
-                        divBot.innerHTML = text.replace(/\n/g, '<br>');
+                        content.innerHTML = text.replace(/\n/g, '<br>');
                     } else {
-                        divBot.innerHTML = text;
+                        content.innerHTML = text;
                     }
+                    divBot.appendChild(content);
+
+                    divBot.appendChild(this.createMessageFooter(conversation?.modelId));
+
                     messagesDisplay.appendChild(divBot);
                 }
             });
         }
 
-        // 3. Sección de envío
         const sendSection = this.renderSendSection();
 
-        chatWindow.appendChild(titleChat);
+        chatWindow.appendChild(headerChat);
         chatWindow.appendChild(messagesDisplay);
         chatWindow.appendChild(sendSection);
 
@@ -98,11 +129,77 @@ export class ChatRenderer {
         }
     }
 
+    createMessageFooter(modelId) {
+        const footer = document.createElement("div");
+        footer.classList.add("message-footer");
+
+        if (modelId) {
+            const badge = document.createElement("span");
+            badge.classList.add("model-badge");
+            badge.textContent = modelId;
+            footer.appendChild(badge);
+        }
+
+        const copyBtn = document.createElement("button");
+        copyBtn.classList.add("btn-copy");
+        copyBtn.title = "Copiar mensaje";
+        copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+
+        copyBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const msgEl = copyBtn.closest('.text-msj');
+            const contentEl = msgEl?.querySelector('.message-content');
+            const text = contentEl?.textContent || contentEl?.innerText || "";
+            if (!text) return;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                copyBtn.classList.add("copied");
+                copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
+                setTimeout(() => {
+                    copyBtn.classList.remove("copied");
+                    copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+                }, 2000);
+            } catch {
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+                copyBtn.classList.add("copied");
+                setTimeout(() => copyBtn.classList.remove("copied"), 2000);
+            }
+        });
+
+        footer.appendChild(copyBtn);
+        return footer;
+    }
+
+    showSkeleton() {
+        const display = this.getMessagesDisplay();
+        if (!display || display.querySelector(".skeleton")) return;
+        const skeleton = document.createElement("div");
+        skeleton.classList.add("skeleton");
+        skeleton.innerHTML = `
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+        `;
+        display.appendChild(skeleton);
+        display.scrollTop = display.scrollHeight;
+    }
+
+    hideSkeleton() {
+        const skeleton = this.container?.querySelector(".skeleton");
+        if (skeleton) skeleton.remove();
+    }
+
     renderSendSection() {
         const section = document.createElement("section");
         section.classList.add("send-section");
         section.innerHTML = `
-            <input id="send-message-input" placeholder="Escribe tu mensaje...">
+            <input id="send-message-input" placeholder="Escribe tu mensaje..." autocomplete="off" autocorrect="off" spellcheck="false">
             <button id="btn-send" class="btn-send btn-action" data-action="send" title="Enviar mensaje">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960">
                     <path d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z"/>
@@ -113,7 +210,7 @@ export class ChatRenderer {
     }
 
     getMessagesDisplay() {
-        return this.container.querySelector(".messages-display");
+        return this.container?.querySelector(".messages-display");
     }
 
     setTyping() {
@@ -127,7 +224,7 @@ export class ChatRenderer {
     }
 
     hideTyping() {
-        const spinner = this.container.querySelector(".spinner");
+        const spinner = this.container?.querySelector(".spinner");
         if (spinner) spinner.remove();
     }
 
@@ -141,23 +238,31 @@ export class ChatRenderer {
         display.scrollTop = display.scrollHeight;
     }
 
-    addBotMessage() {
+    addBotMessage(modelId = null) {
         const display = this.getMessagesDisplay();
         if (!display) return null;
+
         const div = document.createElement("div");
         div.classList.add("text-msj", "ai-message");
+
+        const content = document.createElement("div");
+        content.classList.add("message-content");
+        div.appendChild(content);
+
+        div.appendChild(this.createMessageFooter(modelId));
+
         display.appendChild(div);
         display.scrollTop = display.scrollHeight;
-        return div;
+        return content;
     }
 
     updateTitle(title) {
-        const titleEl = this.container.querySelector(".chat-title");
+        const titleEl = this.container?.querySelector(".chat-title");
         if (titleEl) titleEl.textContent = title;
     }
 
     updateSendButton(action) {
-        const btn = this.container.querySelector(".btn-action");
+        const btn = this.container?.querySelector(".btn-action");
         if (!btn) return;
         if (action === "stop") {
             btn.className = "btn-stop btn-action";
@@ -171,7 +276,7 @@ export class ChatRenderer {
     }
 
     getAction() {
-        return this.container.querySelector(".btn-action")?.getAttribute("data-action");
+        return this.container?.querySelector(".btn-action")?.getAttribute("data-action");
     }
 
     getInput() {

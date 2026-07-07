@@ -1,22 +1,72 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { ChatMistralAI } from "@langchain/mistralai";
-import { ChatGroq } from "@langchain/groq";
-import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { ChatMistralAI } from '@langchain/mistralai';
+import { ChatGroq } from '@langchain/groq';
+import { HumanMessage, SystemMessage, AIMessage, BaseMessage } from '@langchain/core/messages';
 
-const MODEL_DEFAULTS = {
-  "gemini-2.5-flash": { maxTokens: 4096, temperature: 0.7 },
-  "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo": { maxTokens: 4096, temperature: 0.7 },
-  "llama-3.3-70b-versatile": { maxTokens: 4096, temperature: 0.7 },
-  "mistral-small": { maxTokens: 4096, temperature: 0.7 }
+export const MODEL_DEFAULTS = {
+  'gemini-2.5-flash': { maxTokens: 4096, temperature: 0.7 },
+  'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo': { maxTokens: 4096, temperature: 0.7 },
+  'llama-3.3-70b-versatile': { maxTokens: 4096, temperature: 0.7 },
+  'mistral-small': { maxTokens: 4096, temperature: 0.7 },
 };
 
-export async function callAI(input, model, apiKey, options = {}, history = []) {
+export function createChatModel(model: string, apiKey: string, maxTokens: number, temperature: number) {
+  if (model === 'gemini-2.5-flash') {
+    return new ChatGoogleGenerativeAI({
+      model: 'gemini-2.5-flash',
+      apiKey,
+      maxOutputTokens: maxTokens,
+      temperature,
+      maxRetries: 0,
+    });
+  } else if (model === 'mistral-small') {
+    return new ChatMistralAI({
+      model: 'mistral-small-latest',
+      apiKey,
+      maxTokens,
+      temperature,
+      maxRetries: 0,
+    });
+  } else if (model === 'llama-3.3-70b-versatile') {
+    return new ChatGroq({
+      model: 'llama-3.3-70b-versatile',
+      apiKey,
+      maxTokens,
+      temperature,
+      maxRetries: 0,
+    });
+  } else if (model === 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo') {
+    return new ChatGroq({
+      model: 'meta-llama/Llama-3.1-8B-Instruct-Turbo',
+      apiKey,
+      maxTokens,
+      temperature,
+      maxRetries: 0,
+    });
+  }
+  throw new Error(`Modelo no soportado: ${model}`);
+}
+
+interface CallAIOptions {
+  maxTokens?: number;
+  temperature?: number;
+  systemPrompt?: string;
+}
+
+export async function callAI(
+  input: string,
+  model: string,
+  apiKey: string,
+  options: CallAIOptions = {},
+  history: Array<{ role: string; content: string }> = [],
+  onChunk?: (text: string) => void,
+) {
   const defaults = MODEL_DEFAULTS[model] || { maxTokens: 4096, temperature: 0.7 };
   const maxTokens = options.maxTokens || defaults.maxTokens;
   const temperature = options.temperature ?? defaults.temperature;
   const systemPrompt = options.systemPrompt;
 
-  const messages = [];
+  const messages: BaseMessage[] = [];
   if (systemPrompt && systemPrompt.trim()) {
     messages.push(new SystemMessage(systemPrompt));
   }
@@ -31,48 +81,14 @@ export async function callAI(input, model, apiKey, options = {}, history = []) {
 
   messages.push(new HumanMessage(input));
 
-  let llm;
+  const llm = createChatModel(model, apiKey, maxTokens, temperature);
 
-  if (model === "gemini-2.5-flash") {
-    llm = new ChatGoogleGenerativeAI({
-      model: "gemini-2.5-flash",
-      apiKey: apiKey,
-      maxOutputTokens: maxTokens,
-      temperature: temperature,
-      maxRetries: 0
-    });
-  } else if (model === "mistral-small") {
-    llm = new ChatMistralAI({
-      model: "mistral-small-latest",
-      apiKey: apiKey,
-      maxTokens: maxTokens,
-      temperature: temperature,
-      maxRetries: 0
-    });
-  } else if (model === "llama-3.3-70b-versatile") {
-    llm = new ChatGroq({
-      model: "llama-3.3-70b-versatile",
-      apiKey: apiKey,
-      maxTokens: maxTokens,
-      temperature: temperature,
-      maxRetries: 0
-    });
-  } else if (model === "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo") {
-    llm = new ChatGroq({
-      model: "meta-llama/Llama-3.1-8B-Instruct-Turbo",
-      apiKey: apiKey,
-      maxTokens: maxTokens,
-      temperature: temperature,
-      maxRetries: 0
-    });
-  } else {
-    throw new Error(`Modelo no soportado: ${model}`);
-  }
-
-  const chunks = [];
+  const chunks: string[] = [];
   for await (const chunk of await llm.stream(messages)) {
-    chunks.push(chunk.content || "");
+    const text = (chunk.content as string) || '';
+    chunks.push(text);
+    if (onChunk) onChunk(text);
   }
 
-  return chunks.join("");
+  return chunks.join('');
 }

@@ -14,7 +14,8 @@ export default async function authMiddleware(req, res, next) {
     req.userId = payload.userId;
     req.userEmail = payload.email;
     next();
-  } catch (error) {
-    return res.status(401).json({ error: error.message });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Token inválido';
+    return res.status(401).json({ error: msg });
   }
 }

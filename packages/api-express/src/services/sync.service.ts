@@ -1,10 +1,10 @@
 import prisma from '../config/db.js';
 import * as anonService from './anon.service.js';
-import { encrypt, decrypt } from './encryption.service.js';
 
-export async function migrateAnonData(userId, anonSessionId) {
+
+export async function migrateAnonData(userId: string, anonSessionId: string) {
   const conversations = await anonService.getConversations(anonSessionId);
-  
+
   const results = { migrated: 0, messages: 0 };
 
   for (const conv of conversations) {
@@ -16,9 +16,9 @@ export async function migrateAnonData(userId, anonSessionId) {
         title: conv.title,
         createdAt: {
           gte: new Date(new Date(conv.createdAt || Date.now()).getTime() - 5000),
-          lte: new Date(new Date(conv.createdAt || Date.now()).getTime() + 5000)
-        }
-      }
+          lte: new Date(new Date(conv.createdAt || Date.now()).getTime() + 5000),
+        },
+      },
     });
     if (existing) {
       results.migrated++;
@@ -34,13 +34,13 @@ export async function migrateAnonData(userId, anonSessionId) {
         provider: conv.provider,
         createdAt: conv.createdAt ? new Date(conv.createdAt) : new Date(),
         messages: {
-          create: messages.map(m => ({
+          create: messages.map((m) => ({
             role: m.role,
             content: m.content,
-            createdAt: m.createdAt ? new Date(m.createdAt) : new Date()
-          }))
-        }
-      }
+            createdAt: m.createdAt ? new Date(m.createdAt) : new Date(),
+          })),
+        },
+      },
     });
 
     results.migrated++;
@@ -52,7 +52,7 @@ export async function migrateAnonData(userId, anonSessionId) {
     await prisma.userConfig.upsert({
       where: { userId },
       create: { userId, ...config },
-      update: config
+      update: config,
     });
   }
 
@@ -62,8 +62,8 @@ export async function migrateAnonData(userId, anonSessionId) {
       anonSessionId,
       convCount: results.migrated,
       messageCount: results.messages,
-      status: results.migrated > 0 ? 'success' : 'failed'
-    }
+      status: results.migrated > 0 ? 'success' : 'failed',
+    },
   });
 
   await anonService.deleteSession(anonSessionId);

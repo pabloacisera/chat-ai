@@ -1,6 +1,7 @@
+import { Request, Response, NextFunction } from 'express';
 import * as usersService from '../services/users.service.js';
 
-export async function getMe(req, res, next) {
+export async function getMe(req: Request, res: Response, next: NextFunction) {
   try {
     const user = await usersService.getUserConfig(req.userId);
     res.json(user);
@@ -9,7 +10,7 @@ export async function getMe(req, res, next) {
   }
 }
 
-export async function getConfig(req, res, next) {
+export async function getConfig(req: Request, res: Response, next: NextFunction) {
   try {
     const config = await usersService.getUserConfig(req.userId);
     res.json(config);
@@ -18,7 +19,7 @@ export async function getConfig(req, res, next) {
   }
 }
 
-export async function updateConfig(req, res, next) {
+export async function updateConfig(req: Request, res: Response, next: NextFunction) {
   try {
     const config = await usersService.updateUserConfig(req.userId, req.body);
     res.json(config);

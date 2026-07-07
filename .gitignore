@@ -1,7 +1,10 @@
 node_modules/
-.env
-.txtclaves.txt
-*.txt
-node_modules/
 */node_modules/
+.env
+*.txt
+*.json
 .cline
+install_nemo.sh
+dist/
+build
+.txt

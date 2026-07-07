@@ -1,11 +1,12 @@
+import { Request, Response, NextFunction } from 'express';
 import * as conversationsService from '../services/conversations.service.js';
 import archiveDb from '../config/archive.js';
 
-export async function getConversations(req, res, next) {
+export async function getConversations(req: Request, res: Response, next: NextFunction) {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
-    
+
     const conversations = await conversationsService.getConversations(req.userId, limit, offset);
     res.json(conversations);
   } catch (error) {
@@ -13,7 +14,7 @@ export async function getConversations(req, res, next) {
   }
 }
 
-export async function getConversationCount(req, res, next) {
+export async function getConversationCount(req: Request, res: Response, next: NextFunction) {
   try {
     const count = await conversationsService.getConversationCount(req.userId);
     res.json({ count, max: conversationsService.MAX_CONVERSATIONS });
@@ -22,25 +23,25 @@ export async function getConversationCount(req, res, next) {
   }
 }
 
-export async function getConversationMessages(req, res, next) {
+export async function getConversationMessages(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const conversation = await conversationsService.getConversationById(id, req.userId);
-    
+
     if (!conversation) {
       return res.status(404).json({ error: 'Conversación no encontrada' });
     }
-    
+
     res.json(conversation.messages);
   } catch (error) {
     next(error);
   }
 }
 
-export async function createConversation(req, res, next) {
+export async function createConversation(req: Request, res: Response, next: NextFunction) {
   try {
     const { title, modelId, provider } = req.body;
-    
+
     if (!modelId || !provider) {
       return res.status(400).json({ error: 'modelId y provider son requeridos' });
     }
@@ -48,36 +49,37 @@ export async function createConversation(req, res, next) {
     const conversation = await conversationsService.createConversation(req.userId, {
       title,
       modelId,
-      provider
+      provider,
     });
 
     res.status(201).json(conversation);
-  } catch (error) {
-    if (error.message.includes('límite')) {
-      return res.status(400).json({ error: error.message });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : '';
+    if (msg.includes('límite')) {
+      return res.status(400).json({ error: msg });
     }
     next(error);
   }
 }
 
-export async function updateConversation(req, res, next) {
+export async function updateConversation(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const { title } = req.body;
-    
+
     const result = await conversationsService.updateConversation(id, req.userId, { title });
-    
+
     if (result.count === 0) {
       return res.status(404).json({ error: 'Conversación no encontrada' });
     }
-    
+
     res.json({ message: 'Título actualizado' });
   } catch (error) {
     next(error);
   }
 }
 
-export async function deleteConversation(req, res, next) {
+export async function deleteConversation(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     await conversationsService.deleteConversation(id, req.userId);
@@ -87,14 +89,14 @@ export async function deleteConversation(req, res, next) {
   }
 }
 
-export async function deleteBulk(req, res, next) {
+export async function deleteBulk(req: Request, res: Response, next: NextFunction) {
   try {
     const { conversationIds } = req.body;
-    
+
     if (!conversationIds || !Array.isArray(conversationIds)) {
       return res.status(400).json({ error: 'conversationIds es requerido y debe ser un array' });
     }
-    
+
     await conversationsService.deleteConversations(conversationIds, req.userId);
     res.json({ message: 'Conversaciones eliminadas' });
   } catch (error) {
@@ -102,14 +104,14 @@ export async function deleteBulk(req, res, next) {
   }
 }
 
-export async function archiveBulk(req, res, next) {
+export async function archiveBulk(req: Request, res: Response, next: NextFunction) {
   try {
     const { conversationIds } = req.body;
-    
+
     if (!conversationIds || !Array.isArray(conversationIds)) {
       return res.status(400).json({ error: 'conversationIds es requerido y debe ser un array' });
     }
-    
+
     await conversationsService.archiveConversations(conversationIds, req.userId, archiveDb);
     res.json({ message: 'Conversaciones archivadas' });
   } catch (error) {
@@ -117,7 +119,7 @@ export async function archiveBulk(req, res, next) {
   }
 }
 
-export async function archiveAll(req, res, next) {
+export async function archiveAll(req: Request, res: Response, next: NextFunction) {
   try {
     await conversationsService.archiveAllConversations(req.userId, archiveDb);
     res.json({ message: 'Todas las conversaciones archivadas' });

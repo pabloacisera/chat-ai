@@ -27,9 +27,9 @@ templateConfig.innerHTML = `
         
         .modal-wrapper {
             display: flex;
-            background: white;
+            background: var(--bg-white);
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: var(--shadow-lg);
             width: 90%;
             max-width: 950px;
             max-height: 90vh;
@@ -51,8 +51,8 @@ templateConfig.innerHTML = `
         
         .aside {
             width: 380px;
-            background: #f8f9fa;
-            border-left: 1px solid #e9ecef;
+            background: var(--bg-main);
+            border-left: 1px solid var(--border);
             padding: 1.5rem;
             display: flex;
             flex-direction: column;
@@ -61,13 +61,13 @@ templateConfig.innerHTML = `
         
         h2 { 
             margin: 0 0 0.5rem; 
-            color: #333; 
+            color: var(--text-primary); 
             font-size: 1.4rem;
         }
         
         h3 {
             margin: 1.5rem 0 1rem;
-            color: #555;
+            color: var(--text-secondary);
             font-size: 0.95rem;
             font-weight: 600;
             text-transform: uppercase;
@@ -80,7 +80,7 @@ templateConfig.innerHTML = `
         
         .section-divider {
             height: 1px;
-            background: #e9ecef;
+            background: var(--border);
             margin: 1.5rem 0;
         }
         
@@ -107,33 +107,33 @@ templateConfig.innerHTML = `
         
         label { 
             font-weight: 600; 
-            color: #555;
+            color: var(--text-secondary);
             font-size: 0.85rem;
         }
         
         span.hint {
             font-size: 0.75rem;
-            color: #888;
+            color: var(--sidebar-muted);
             line-height: 1.3;
         }
         
         select, input, textarea {
             padding: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border);
             border-radius: 6px;
             font-size: 0.9rem;
-            transition: border-color 0.2s;
+            transition: border-color var(--transition);
             font-family: inherit;
         }
         
         select:focus, input:focus, textarea:focus {
             outline: none;
-            border-color: #007bff;
+            border-color: var(--primary);
         }
         
         input:disabled, textarea:disabled {
-            background-color: #f5f5f5;
-            color: #999;
+            background-color: var(--message-ai-bg);
+            color: var(--sidebar-muted);
             cursor: not-allowed;
         }
         
@@ -159,17 +159,18 @@ templateConfig.innerHTML = `
             border-radius: 8px; 
             border: none; 
             font-weight: bold; 
-            transition: all 0.2s;
+            transition: all var(--transition);
             font-size: 0.9rem;
+            font-family: inherit;
         }
         
         #btn-save { 
-            background: #007bff; 
-            color: white; 
+            background: var(--accent); 
+            color: var(--primary); 
         }
         
         #btn-save:hover { 
-            background: #0056b3; 
+            background: var(--accent-hover); 
             transform: translateY(-1px);
         }
         
@@ -179,13 +180,13 @@ templateConfig.innerHTML = `
         
         #btn-cancel { 
             background: transparent; 
-            color: #888; 
-            border: 1px solid #ddd;
+            color: var(--text-secondary); 
+            border: 1px solid var(--border);
         }
         
         #btn-cancel:hover { 
-            background: #f5f5f5;
-            color: #666;
+            background: var(--message-ai-bg);
+            color: var(--text-primary);
         }
         
         /* Aside - Keys Table */
@@ -211,16 +212,16 @@ templateConfig.innerHTML = `
         .keys-table thead {
             position: sticky;
             top: 0;
-            background: #f8f9fa;
+            background: var(--bg-main);
             z-index: 1;
         }
         
         .keys-table th {
             text-align: left;
             padding: 10px 8px;
-            color: #666;
+            color: var(--text-secondary);
             font-weight: 600;
-            border-bottom: 2px solid #dee2e6;
+            border-bottom: 2px solid var(--border);
             font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -228,17 +229,17 @@ templateConfig.innerHTML = `
         
         .keys-table td {
             padding: 10px 8px;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--border);
             vertical-align: middle;
         }
         
         .keys-table tbody tr:hover {
-            background: #e9ecef;
+            background: var(--border);
         }
         
         .keys-table .model-name {
             font-weight: 500;
-            color: #333;
+            color: var(--text-primary);
             font-size: 0.8rem;
         }
         
@@ -246,7 +247,7 @@ templateConfig.innerHTML = `
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #28a745;
+            background: var(--accent);
             display: inline-block;
             vertical-align: middle;
             margin-right: 4px;
@@ -259,33 +260,29 @@ templateConfig.innerHTML = `
         }
         
         .key-actions button {
-            padding: 2px 6px;
+            background: none;
+            border: none;
+            padding: 4px 6px;
             font-size: 11px;
-            border-radius: 3px;
+            border-radius: 4px;
             line-height: 1;
             cursor: pointer;
-        }
-        
-        .btn-edit-key {
-            background: #6c757d;
-            color: white;
+            color: var(--sidebar-muted);
+            transition: all var(--transition);
         }
         
         .btn-edit-key:hover {
-            background: #5a6268;
-        }
-        
-        .btn-remove-key {
-            background: #dc3545;
-            color: white;
+            background: var(--accent-light);
+            color: var(--accent);
         }
         
         .btn-remove-key:hover {
-            background: #c82333;
+            background: rgba(234, 67, 53, 0.15);
+            color: var(--danger);
         }
         
         .empty-keys {
-            color: #999;
+            color: var(--sidebar-muted);
             font-size: 0.8rem;
             text-align: center;
             padding: 1rem;
@@ -322,16 +319,17 @@ templateConfig.innerHTML = `
         }
         
         .edit-key-form {
-            background: white;
+            background: var(--bg-white);
             padding: 1.5rem;
             border-radius: 8px;
             width: 90%;
             max-width: 400px;
+            box-shadow: var(--shadow-lg);
         }
         
         .edit-key-form h4 {
             margin: 0 0 1rem;
-            color: #333;
+            color: var(--text-primary);
         }
         
         .edit-key-form input, .edit-key-form textarea {
@@ -350,13 +348,14 @@ templateConfig.innerHTML = `
         }
         
         .btn-confirm {
-            background: #007bff;
-            color: white;
+            background: var(--accent);
+            color: var(--primary);
         }
         
         .btn-cancel-edit {
-            background: #6c757d;
-            color: white;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
         }
     </style>
     
@@ -427,19 +426,19 @@ templateConfig.innerHTML = `
                 <div id="conversation-manager" style="display: none;">
                     <div class="conversation-list-container">
                         <div style="margin-bottom: 10px;">
-                            <label style="font-size: 0.8rem; color: #666;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary);">
                                 <input type="checkbox" id="select-all-convs"> Seleccionar todas
                             </label>
                         </div>
-                        <div id="conversation-list" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 8px;">
+                        <div id="conversation-list" style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px;">
                         </div>
                     </div>
                     <div class="actions" style="flex-direction: row; gap: 10px; margin-top: 10px;">
-                        <button type="button" id="btn-archive-selected" class="btn-action-convs" style="background: #17a2b8; color: white; padding: 8px 12px; font-size: 0.8rem;">📦 Archivar</button>
-                        <button type="button" id="btn-delete-selected" class="btn-action-convs" style="background: #dc3545; color: white; padding: 8px 12px; font-size: 0.8rem;">🗑️ Eliminar</button>
+                        <button type="button" id="btn-archive-selected" class="btn-action-convs" style="background: var(--accent); color: var(--primary); padding: 8px 12px; font-size: 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">📦 Archivar</button>
+                        <button type="button" id="btn-delete-selected" class="btn-action-convs" style="background: var(--danger); color: white; padding: 8px 12px; font-size: 0.8rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">🗑️ Eliminar</button>
                     </div>
                 </div>
-                <div id="no-conversations-msg" class="empty-keys" style="color: #999; font-size: 0.85rem; padding: 10px;">
+                <div id="no-conversations-msg" class="empty-keys" style="color: var(--sidebar-muted); font-size: 0.85rem; padding: 10px;">
                     Carga las conversaciones desde el panel principal
                 </div>
             </div>
@@ -536,7 +535,7 @@ export class ConfigChatModal extends HTMLElement {
         
         this.conversations.forEach(conv => {
             const div = document.createElement("div");
-            div.style.cssText = "display: flex; align-items: center; gap: 8px; padding: 6px; border-bottom: 1px solid #eee;";
+            div.style.cssText = "display: flex; align-items: center; gap: 8px; padding: 6px; border-bottom: 1px solid var(--border);";
             div.innerHTML = `
                 <input type="checkbox" class="conv-checkbox" value="${conv.id}" style="cursor: pointer;">
                 <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;">${conv.title || 'Sin título'}</span>
@@ -579,13 +578,7 @@ export class ConfigChatModal extends HTMLElement {
             this.conversations = this.conversations.filter(c => !ids.includes(String(c.id)));
             this.renderConversationsManager();
 
-            const convService = window.chatApp?.conversationService;
-            if (convService) {
-                ids.forEach(id => {
-                    convService.conversations = convService.conversations.filter(c => String(c.id) !== String(id));
-                });
-                window.chatApp?.sidebarRenderer?.render(convService.getAll());
-            }
+            document.dispatchEvent(new CustomEvent('conversations-archived', { detail: { ids } }));
         } catch (error) {
             console.error("Error archivando:", error);
             ToastNotification.error("Error al archivar conversaciones");
@@ -616,18 +609,7 @@ export class ConfigChatModal extends HTMLElement {
             this.conversations = this.conversations.filter(c => !ids.includes(String(c.id)));
             this.renderConversationsManager();
 
-            const convService = window.chatApp?.conversationService;
-            if (convService) {
-                ids.forEach(id => {
-                    convService.conversations = convService.conversations.filter(c => String(c.id) !== String(id));
-                });
-                window.chatApp?.sidebarRenderer?.render(convService.getAll());
-                const currentId = convService.getCurrentId();
-                if (currentId && ids.includes(String(currentId))) {
-                    convService.setCurrent(null);
-                    window.chatApp?.chatRenderer?.clear?.();
-                }
-            }
+            document.dispatchEvent(new CustomEvent('conversations-deleted', { detail: { ids } }));
 
             ToastNotification.success(`${ids.length} conversación(es) eliminada(s)`);
         } catch (error) {
@@ -743,8 +725,8 @@ render() {
                     <span class="status-dot"></span> OK
                 </td>
                 <td style="width: 70px; text-align: right;">
-                    <button class="btn-edit-key" data-model="${item.model}" title="Editar">✏️</button>
-                    <button class="btn-remove-key" data-model="${item.model}" title="Eliminar">🗑️</button>
+                    <button class="btn-edit-key" data-model="${item.model}" title="Editar"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                    <button class="btn-remove-key" data-model="${item.model}" title="Eliminar"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                 </td>
             `;
             tbody.appendChild(tr);

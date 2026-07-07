@@ -1,28 +1,24 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../config/db.js';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key_32_chars_minimum';
+import { JWT_SECRET } from '../config/secrets.js';
 
 async function getGoogleUserInfo(accessToken) {
   const response = await fetch(`https://www.googleapis.com/oauth2/v2/userinfo`, {
-    headers: { Authorization: `Bearer ${accessToken}` }
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) throw new Error('Error obtaining Google user info');
   return response.json();
 }
 
-export async function googleAuth(googleToken) {
+export async function googleAuth(googleToken: string) {
   const googleUser = await getGoogleUserInfo(googleToken);
-  
-  const { id: googleId, email, picture: avatar } = googleUser;
+
+  const { id: googleId, email, picture: avatar } = googleUser as { id: string; email: string; picture: string };
 
   let user = await prisma.user.findFirst({
     where: {
-      OR: [
-        { googleId },
-        { email }
-      ]
-    }
+      OR: [{ googleId }, { email }],
+    },
   });
 
   if (!user) {
@@ -32,9 +28,9 @@ export async function googleAuth(googleToken) {
         googleId,
         avatar,
         passwordHash: 'GOOGLE_AUTH',
-        config: { create: {} }
+        config: { create: {} },
       },
-      include: { config: true }
+      include: { config: true },
     });
   }
 
@@ -42,11 +38,7 @@ export async function googleAuth(googleToken) {
     throw new Error('Usuario eliminado');
   }
 
-  const token = jwt.sign(
-    { userId: user.id, email: user.email },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+  const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -54,8 +46,8 @@ export async function googleAuth(googleToken) {
     data: {
       userId: user.id,
       token,
-      expiresAt
-    }
+      expiresAt,
+    },
   });
 
   return {
@@ -64,7 +56,7 @@ export async function googleAuth(googleToken) {
       id: user.id,
       email: user.email,
       avatar: user.avatar,
-      createdAt: user.createdAt
-    }
+      createdAt: user.createdAt,
+    },
   };
 }

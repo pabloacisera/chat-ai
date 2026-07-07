@@ -17,10 +17,10 @@ templateSingIn.innerHTML = `
             font-family: 'Segoe UI', Roboto, sans-serif;
         }
         .container { 
-            background: white; 
+            background: var(--bg-white); 
             padding: 2rem; 
             border-radius: 12px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: var(--shadow-lg);
             text-align: center;
             width: 90%;
             max-width: 400px;
@@ -28,40 +28,39 @@ templateSingIn.innerHTML = `
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } }
         
-        h2 { margin: 0 0 1rem; color: #333; }
-        p { color: #666; margin-bottom: 2rem; }
+        h2 { margin: 0 0 1rem; color: var(--text-primary); }
+        p { color: var(--text-secondary); margin-bottom: 2rem; }
         
         .form-group { margin-bottom: 1rem; text-align: left; }
-        .form-group label { display: block; margin-bottom: 0.5rem; color: #555; font-size: 0.9rem; }
-        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; }
         
         .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 1.5rem; }
         
         button { 
             cursor: pointer; padding: 12px; border-radius: 8px; border: none; font-weight: bold; 
+            font-family: inherit;
         }
-        #btn-login { background: #007bff; color: white; transition: background 0.2s; }
-        #btn-login:hover { background: #0056b3; }
-        #btn-register { background: #28a745; color: white; }
-        #btn-register:hover { background: #218838; }
-        #btn-close { background: transparent; color: #888; }
+        #btn-action { background: var(--accent); color: var(--primary); transition: background var(--transition); }
+        #btn-action:hover { background: var(--accent-hover); }
+        #btn-close { background: transparent; color: var(--text-secondary); }
         
-        .tabs { display: flex; margin-bottom: 1.5rem; border-bottom: 2px solid #eee; }
-        .tab { flex: 1; padding: 10px; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-        .tab.active { color: #007bff; border-bottom-color: #007bff; }
+        .tabs { display: flex; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+        .tab { flex: 1; padding: 10px; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
         
-        .error { color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; }
+        .error { color: var(--danger); font-size: 0.9rem; margin-top: 0.5rem; }
         .loading { opacity: 0.6; pointer-events: none; }
         
         .divider { display: flex; align-items: center; margin: 1.5rem 0; }
-        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #ddd; }
-        .divider span { padding: 0 10px; color: #888; font-size: 0.85rem; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .divider span { padding: 0 10px; color: var(--text-secondary); font-size: 0.85rem; }
         
         #google-btn { 
-            background: white; color: #333; border: 1px solid #ddd; display: flex; 
+            background: var(--bg-white); color: var(--text-primary); border: 1px solid var(--border); display: flex; 
             align-items: center; justify-content: center; gap: 10px; padding: 12px;
         }
-        #google-btn:hover { background: #f5f5f5; }
+        #google-btn:hover { background: var(--message-ai-bg); }
         #google-btn img { width: 18px; height: 18px; }
     </style>
     <div class="container">
@@ -115,21 +114,21 @@ templateDataUser.innerHTML = `
             font-family: 'Segoe UI', Roboto, sans-serif;
         }
         .container { 
-            background: white; 
+            background: var(--bg-white); 
             padding: 2rem; 
             border-radius: 12px; 
             width: 90%;
             max-width: 450px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: var(--shadow-lg);
         }
-        h2 { margin-top: 0; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
-        .user-card { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        h2 { margin-top: 0; border-bottom: 2px solid var(--border); padding-bottom: 10px; color: var(--text-primary); }
+        .user-card { background: var(--bg-main); padding: 15px; border-radius: 8px; margin: 15px 0; }
         
         .footer-actions { display: flex; justify-content: space-between; margin-top: 20px; }
         
-        button { cursor: pointer; padding: 10px 20px; border-radius: 6px; border: none; font-weight: bold; }
-        #btn-clear { background: #dc3545; color: white; }
-        #btn-exit { background: #6c757d; color: white; }
+        button { cursor: pointer; padding: 10px 20px; border-radius: 6px; border: none; font-weight: bold; font-family: inherit; }
+        #btn-clear { background: var(--danger); color: white; }
+        #btn-exit { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
     </style>
     <div class="container">
         <h2>Perfil de Usuario</h2>

@@ -9,65 +9,65 @@ export function generateSessionId() {
 
 export async function createSession() {
   const sessionId = generateSessionId();
-  
+
   await redisClient.hset(`anon:${sessionId}:meta`, {
     createdAt: new Date().toISOString(),
-    welcomeShown: 'false'
+    welcomeShown: 'false',
   });
-  
+
   await redisClient.expire(`anon:${sessionId}:meta`, TTL);
   await redisClient.expire(`anon:${sessionId}:config`, TTL);
   await redisClient.expire(`anon:${sessionId}:conversations`, TTL);
-  
+
   return sessionId;
 }
 
-export async function getSessionMeta(sessionId) {
+export async function getSessionMeta(sessionId: string) {
   const meta = await redisClient.hgetall(`anon:${sessionId}:meta`);
   return meta || null;
 }
 
-export async function getSessionConfig(sessionId) {
+export async function getSessionConfig(sessionId: string) {
   const config = await redisClient.get(`anon:${sessionId}:config`);
   return config ? JSON.parse(config) : null;
 }
 
-export async function updateSessionConfig(sessionId, config) {
+export async function updateSessionConfig(sessionId: string, config: Record<string, unknown>) {
   await redisClient.set(`anon:${sessionId}:config`, JSON.stringify(config));
   await redisClient.expire(`anon:${sessionId}:config`, TTL);
 }
 
-export async function getConversations(sessionId) {
+export async function getConversations(sessionId: string) {
   const conversations = await redisClient.get(`anon:${sessionId}:conversations`);
   return conversations ? JSON.parse(conversations) : [];
 }
 
-export async function saveConversations(sessionId, conversations) {
+export async function saveConversations(sessionId: string, conversations: unknown[]) {
   await redisClient.set(`anon:${sessionId}:conversations`, JSON.stringify(conversations));
   await redisClient.expire(`anon:${sessionId}:conversations`, TTL);
 }
 
-export async function getConversationMessages(sessionId, convId) {
+export async function getConversationMessages(sessionId: string, convId: string) {
   const messages = await redisClient.get(`anon:${sessionId}:conv:${convId}`);
   return messages ? JSON.parse(messages) : [];
 }
 
-export async function saveConversationMessages(sessionId, convId, messages) {
+export async function saveConversationMessages(sessionId: string, convId: string, messages: unknown[]) {
   await redisClient.set(`anon:${sessionId}:conv:${convId}`, JSON.stringify(messages));
   await redisClient.expire(`anon:${sessionId}:conv:${convId}`, TTL);
 }
 
-export async function deleteSession(sessionId) {
+export async function deleteSession(sessionId: string) {
   const keys = await redisClient.keys(`anon:${sessionId}:*`);
   if (keys.length > 0) {
     await redisClient.del(...keys);
   }
 }
 
-export async function deleteConversationMessages(sessionId, convId) {
+export async function deleteConversationMessages(sessionId: string, convId: string) {
   await redisClient.del(`anon:${sessionId}:conv:${convId}`);
 }
 
-export async function setWelcomeShown(sessionId) {
+export async function setWelcomeShown(sessionId: string) {
   await redisClient.hset(`anon:${sessionId}:meta`, 'welcomeShown', 'true');
 }

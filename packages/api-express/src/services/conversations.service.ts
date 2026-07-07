@@ -2,12 +2,33 @@ import prisma from '../config/db.js';
 
 export const MAX_CONVERSATIONS = 100;
 
-export async function getConversations(userId, limit = 50, offset = 0) {
+export async function cleanupOldConversations(userId: string) {
+  const config = await prisma.userConfig.findUnique({ where: { userId } });
+  if (!config?.autoDeleteDays) return 0;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - config.autoDeleteDays);
+
+  const result = await prisma.conversation.updateMany({
+    where: {
+      userId,
+      isDeleted: false,
+      updatedAt: { lt: cutoff },
+    },
+    data: { isDeleted: true },
+  });
+
+  return result.count;
+}
+
+export async function getConversations(userId: string, limit = 50, offset = 0) {
+  await cleanupOldConversations(userId);
+
   return prisma.conversation.findMany({
     where: {
       userId,
       isDeleted: false,
-      isArchived: false
+      isArchived: false,
     },
     select: {
       id: true,
@@ -15,44 +36,46 @@ export async function getConversations(userId, limit = 50, offset = 0) {
       modelId: true,
       provider: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
     },
     orderBy: { updatedAt: 'desc' },
     take: limit,
-    skip: offset
+    skip: offset,
   });
 }
 
-export async function getConversationCount(userId) {
+export async function getConversationCount(userId: string) {
   return prisma.conversation.count({
     where: {
       userId,
       isDeleted: false,
-      isArchived: false
-    }
+      isArchived: false,
+    },
   });
 }
 
-export async function getConversationById(conversationId, userId) {
+export async function getConversationById(conversationId: string, userId: string) {
   return prisma.conversation.findFirst({
     where: {
       id: conversationId,
       userId,
-      isDeleted: false
+      isDeleted: false,
     },
     include: {
       messages: {
         where: { isDeleted: false },
-        orderBy: { createdAt: 'asc' }
-      }
-    }
+        orderBy: { createdAt: 'asc' },
+      },
+    },
   });
 }
 
-export async function createConversation(userId, data) {
+export async function createConversation(userId: string, data: { title?: string; modelId: string; provider: string }) {
   const count = await getConversationCount(userId);
   if (count >= MAX_CONVERSATIONS) {
-    throw new Error(`Has alcanzado el límite de ${MAX_CONVERSATIONS} conversaciones. Archiva o elimina algunas para crear una nueva.`);
+    throw new Error(
+      `Has alcanzado el límite de ${MAX_CONVERSATIONS} conversaciones. Archiva o elimina algunas para crear una nueva.`,
+    );
   }
 
   return prisma.conversation.create({
@@ -60,21 +83,21 @@ export async function createConversation(userId, data) {
       userId,
       title: data.title || 'Nueva conversación',
       modelId: data.modelId,
-      provider: data.provider
-    }
+      provider: data.provider,
+    },
   });
 }
 
-export async function updateConversation(conversationId, userId, data) {
+export async function updateConversation(conversationId: string, userId: string, data: { title?: string }) {
   return prisma.conversation.updateMany({
     where: {
       id: conversationId,
       userId,
-      isDeleted: false
+      isDeleted: false,
     },
     data: {
-      ...(data.title && { title: data.title })
-    }
+      ...(data.title && { title: data.title }),
+    },
   });
 }
 
@@ -82,19 +105,19 @@ export async function deleteConversation(conversationId, userId) {
   return prisma.conversation.updateMany({
     where: {
       id: conversationId,
-      userId
+      userId,
     },
-    data: { isDeleted: true }
+    data: { isDeleted: true },
   });
 }
 
-export async function deleteConversations(conversationIds, userId) {
+export async function deleteConversations(conversationIds: string[], userId: string) {
   return prisma.conversation.updateMany({
     where: {
       id: { in: conversationIds },
-      userId
+      userId,
     },
-    data: { isDeleted: true }
+    data: { isDeleted: true },
   });
 }
 
@@ -102,11 +125,11 @@ export async function archiveConversations(conversationIds, userId, archiveDb) {
   const conversations = await prisma.conversation.findMany({
     where: {
       id: { in: conversationIds },
-      userId
+      userId,
     },
     include: {
-      messages: true
-    }
+      messages: true,
+    },
   });
 
   const insertConv = archiveDb.prepare(`
@@ -121,7 +144,7 @@ export async function archiveConversations(conversationIds, userId, archiveDb) {
 
   for (const conv of conversations) {
     const archivedId = `archived_${conv.id}`;
-    
+
     insertConv.run(
       archivedId,
       conv.id,
@@ -130,41 +153,35 @@ export async function archiveConversations(conversationIds, userId, archiveDb) {
       conv.modelId,
       conv.provider,
       new Date().toISOString(),
-      conv.createdAt.toISOString()
+      conv.createdAt.toISOString(),
     );
 
     for (const msg of conv.messages) {
-      insertMsg.run(
-        `archived_${msg.id}`,
-        archivedId,
-        msg.role,
-        msg.content,
-        msg.createdAt.toISOString()
-      );
+      insertMsg.run(`archived_${msg.id}`, archivedId, msg.role, msg.content, msg.createdAt.toISOString());
     }
   }
 
   return prisma.conversation.updateMany({
     where: {
       id: { in: conversationIds },
-      userId
+      userId,
     },
-    data: { isArchived: true }
+    data: { isArchived: true },
   });
 }
 
-export async function archiveAllConversations(userId, archiveDb) {
+export async function archiveAllConversations(userId: string, archiveDb: Record<string, unknown>) {
   const conversations = await prisma.conversation.findMany({
     where: {
       userId,
       isDeleted: false,
-      isArchived: false
+      isArchived: false,
     },
     include: {
-      messages: true
-    }
+      messages: true,
+    },
   });
 
-  const convIds = conversations.map(c => c.id);
+  const convIds = conversations.map((c) => c.id);
   return archiveConversations(convIds, userId, archiveDb);
 }

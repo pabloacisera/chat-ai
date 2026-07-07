@@ -1,6 +1,7 @@
+import { Request, Response, NextFunction } from 'express';
 import * as syncService from '../services/sync.service.js';
 
-export async function migrate(req, res, next) {
+export async function migrate(req: Request, res: Response, next: NextFunction) {
   try {
     const { anonSessionId } = req.body;
 
@@ -9,10 +10,10 @@ export async function migrate(req, res, next) {
     }
 
     const results = await syncService.migrateAnonData(req.userId, anonSessionId);
-    res.json({ 
+    res.json({
       message: 'Migración completada',
       migratedConversations: results.migrated,
-      migratedMessages: results.messages
+      migratedMessages: results.messages,
     });
   } catch (error) {
     next(error);
